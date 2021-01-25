@@ -1,0 +1,19 @@
+# WatchyOS
+
+An easy operating system for [Watchy](https://github.com/sqfmi/Watchy).
+
+## Goals:
+- The basics
+	- Show the time (updated every minute)
+	- Show the date
+	- Step counter
+	- Display battery (if low)
+- Connection to phone:
+	- Show notifications
+	- Dismiss notifications on phone
+	- Music control
+- Sleep mode to save battery
+- Other
+	- Timer/Stopwatch
+- Stretch goals
+	- Shortcut Tapping
