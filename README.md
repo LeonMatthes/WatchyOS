@@ -2,6 +2,8 @@
 
 An easy operating system for [Watchy](https://github.com/sqfmi/Watchy).
 
+To get started, please install the [ESP IDF](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/)
+
 ## Goals:
 - The basics
 	- Show the time (updated every minute)
