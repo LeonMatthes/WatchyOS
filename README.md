@@ -17,3 +17,6 @@ An easy operating system for [Watchy](https://github.com/sqfmi/Watchy).
 	- Timer/Stopwatch
 - Stretch goals
 	- Shortcut Tapping
+
+### GUI Mockup
+![GUI Mockup](https://github.com/LeonMatthes/WatchyOS/raw/main/res/gui-mockup.jpg)
