@@ -16,6 +16,7 @@
 
 #include "constants.h"
 #include "battery.h"
+#include "accelerometer.h"
 
 #include "res/icons.h"
 #include "res/nums.h"
@@ -123,10 +124,10 @@ void app_main(void)
   Wire.begin(SDA_PIN, SCL_PIN);
 
   switch (wakeup_reason) {
-    case ESP_SLEEP_WAKEUP_EXT0:
-      printf("RTC wakeup\n");
-      __attribute__ ((fallthrough));
     case ESP_SLEEP_WAKEUP_EXT1:
+      accelerometer_test();
+      __attribute__ ((fallthrough));
+    case ESP_SLEEP_WAKEUP_EXT0:
       RTC.alarm(ALARM_2);
       RTC.read(currentTime);
       updateDisplay(true);
