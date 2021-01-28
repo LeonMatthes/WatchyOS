@@ -8,21 +8,15 @@ static const char* TAG = "Battery";
 
 // We have a voltage divider of 2x 100K Ohm
 // With a maximum charging voltage of 4.2 V, we get a maximum input voltage of 2.1V
-// So to get the best accuracy, we choose an Attenuation of 11dB
+// So to get the best accuracy, we choose an Attenuation of 11dB - ADC_ATTEN_DB_11
 //
 // See https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/adc.html#_CPPv425adc1_config_channel_atten14adc1_channel_t11adc_atten_t
 
 // ADC1_CHANNEL_5 is GPIO 33, which is our battery input
 //
 // See https://docs.espressif.com/projects/esp-idf/en/v4.2/esp32/api-reference/peripherals/adc.html#_CPPv414adc1_channel_t
-#define BATTERY_CHANNEL ADC1_CHANNEL_5
-
-// Max charging voltage, as defined in Datasheet
-#define MAX_VOLTAGE 4.2
-
-// Minimum discharge voltage as defined in Datasheet
-// May need to be set higher in the future if it's not enough for any other component
-#define MIN_VOLTAGE 2.75
+#define BATTERY_ADC1_CHANNEL ADC1_CHANNEL_5
+#define BATTERY_ADC_CHANNEL ADC_CHANNEL_5
 
 // Reference voltage characteristics.
 // Used to calibrate adc readings
@@ -34,7 +28,7 @@ void initializeCharacteristics() {
     adc_characteristics = new esp_adc_cal_characteristics_t();
 
     esp_adc_cal_value_t val_type = esp_adc_cal_characterize(
-        ADC_UNIT_1,
+        ADC_UNIT_1, // use ADC1
         ADC_ATTEN_DB_11,
         ADC_WIDTH_BIT_12,
         1100 /*mV - default value, see esp-idf docs*/,
@@ -56,15 +50,24 @@ float batteryVoltage() {
   // // range from 0 to 4095
   ESP_ERROR_CHECK(adc1_config_width(ADC_WIDTH_BIT_12));
 
-  ESP_ERROR_CHECK(adc1_config_channel_atten(BATTERY_CHANNEL, ADC_ATTEN_DB_11));
+  ESP_ERROR_CHECK(adc1_config_channel_atten(BATTERY_ADC1_CHANNEL, ADC_ATTEN_DB_11));
 
   // Read the actual voltage
   uint32_t voltagemV;
-  ESP_ERROR_CHECK(esp_adc_cal_get_voltage(ADC_CHANNEL_5, adc_characteristics, &voltagemV));
+  ESP_ERROR_CHECK(esp_adc_cal_get_voltage(BATTERY_ADC_CHANNEL, adc_characteristics, &voltagemV));
 
   // // Multiply by 2 due to hardware voltage divider
   return 2.f * (voltagemV / 1000.f);
 }
+
+
+// Max charging voltage, as defined in Datasheet is 4.2V
+// We use a slightly lower value, as it drops very quickly when unplugged
+#define MAX_VOLTAGE 4.15
+
+// Minimum discharge voltage as defined in Datasheet
+// May need to be set higher in the future if it's not enough for any other component
+#define MIN_VOLTAGE 2.75
 
 float batteryPercentage() {
   float percentage = (batteryVoltage() - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE);
