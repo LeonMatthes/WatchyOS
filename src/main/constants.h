@@ -10,7 +10,6 @@
 #define DC 10
 #define RESET 9
 #define BUSY_PIN 19
-#define VIB_MOTOR_PIN 13
 #define VIB_MOTOR_GPIO GPIO_NUM_13
 #define MENU_BTN_PIN 26
 #define BACK_BTN_PIN 25
