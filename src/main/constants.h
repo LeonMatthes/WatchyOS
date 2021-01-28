@@ -2,8 +2,8 @@
 #define CONFIG_H
 
 //pins
-#define SDA 21
-#define SCL 22
+#define SDA_PIN 21
+#define SCL_PIN 22
 #define ADC_PIN 33
 #define RTC_PIN GPIO_NUM_27
 #define CS 5
