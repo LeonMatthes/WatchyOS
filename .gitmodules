@@ -1,3 +1,3 @@
 [submodule "src/components/arduino"]
 	path = src/components/arduino
-	url = https://github.com/summivox/arduino-esp32
+	url = https://github.com/LeonMatthes/arduino-esp32.git
