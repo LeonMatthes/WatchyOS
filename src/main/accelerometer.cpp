@@ -7,6 +7,9 @@
 
 #include <cmath>
 
+#include <esp_log.h>
+static const char* TAG = "Accelerometer";
+
 int8_t accelerometer_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void* intf_ptr) {
   Wire.beginTransmission(BMA4_I2C_ADDR_PRIMARY);
   Wire.write(reg_addr);
@@ -37,8 +40,115 @@ void accelerometer_delay_us(uint32_t period, void* intf_ptr) {
   vTaskDelay(std::ceil(static_cast<float>(period) / 1000 / portTICK_PERIOD_MS));
 }
 
-void accelerometer_test() {
+using namespace accelerometer;
 
+RTC_DATA_ATTR struct bma4_dev accelerometer::bma;
+
+bool accelerometer::init() {
+  //soft reset first
+  uint8_t data = BMA4_SOFT_RESET;
+  accelerometer_i2c_write(BMA4_CMD_ADDR, &data, 1, nullptr);
+  vTaskDelay(10 / portTICK_PERIOD_MS);
+
+  bma.intf = BMA4_I2C_INTF;
+  bma.intf_ptr = static_cast<void*>(&bma); // intf_ptr must be set to non-NULL for some reason
+  bma.read_write_len = 8;
+  bma.resolution = 12;
+  bma.bus_read = accelerometer_i2c_read;
+  bma.bus_write = accelerometer_i2c_write;
+  bma.delay_us = accelerometer_delay_us;
+  bma.feature_len = BMA423_FEATURE_SIZE;
+
+  int16_t result;
+  // printf("NULL: %x, &bma: %x\n", &bma,);
+  if((result = bma423_init(&bma))) {
+    ESP_LOGE(TAG, "bma423_init failed %i\n", result);
+    return false;
+  }
+
+  if((result = bma423_write_config_file(&bma))) {
+    ESP_LOGE(TAG, "bma423_write_config_file failed %i\n", result);
+    return false;
+  }
+
+  if ((result = bma4_set_accel_enable(1, &bma))) {
+    ESP_LOGE(TAG, "bma4_set_accel_enable failed %i\n", result);
+    return false;
+  }
+
+  struct bma4_accel_config accel_config;
+
+  // at least 200 Hz recommended for tap/double-tap
+  accel_config.odr = BMA4_OUTPUT_DATA_RATE_200HZ;
+  accel_config.range = BMA4_ACCEL_RANGE_2G;
+  accel_config.bandwidth = BMA4_ACCEL_NORMAL_AVG4;
+
+  // disable performance mode
+  accel_config.perf_mode = BMA4_CIC_AVG_MODE;
+
+  if((result = bma4_set_accel_config(&accel_config, &bma))) {
+    ESP_LOGE(TAG, "bma4_set_accel_config failed %i\n", result);
+    return false;
+  }
+
+  // enable low power operation
+  if((result = bma4_set_advance_power_save(1, &bma))) {
+    ESP_LOGE(TAG, "bma4_set_advance_power_save failed %i\n", result);
+    return false;
+  }
+
+  struct bma423_axes_remap remap_data;
+
+  remap_data.x_axis = 1;
+  remap_data.x_axis_sign = 0xFF;
+  remap_data.y_axis = 0;
+  remap_data.y_axis_sign = 0xFF;
+  remap_data.z_axis = 2;
+  remap_data.z_axis_sign = 0xFF;
+
+  if((result = bma423_set_remap_axes(&remap_data, &bma))) {
+    ESP_LOGE(TAG, "bma423_set_remap_axes failed %i\n", result);
+    return false;
+  }
+
+  // do a last error check
+  struct bma4_err_reg error_reg;
+  if((result = bma4_get_error_status(&error_reg, &bma))) {
+    ESP_LOGE(TAG, "bma4_get_error_status failed %i\n", result);
+    return false;
+  }
+  if(error_reg.fatal_err || error_reg.cmd_err) {
+    ESP_LOGE(TAG,
+        "bma has error state set:\nerror_reg.fatal_err: %i\nerror_reg.cmd_err: %i\n",
+        error_reg.fatal_err,
+        error_reg.cmd_err);
+    return false;
+  }
+
+  return true;
+}
+
+bool accelerometer::enableStepCounter() {
+  int16_t result;
+  if ((result = bma423_feature_enable(BMA423_STEP_CNTR, 1, &bma))) {
+    ESP_LOGE(TAG, "Enabling step counter failed: bma423_feature_enable %i\n", result);
+    return false;
+  }
+  return true;
+}
+
+uint32_t accelerometer::stepCount() {
+  int16_t result;
+  uint32_t step_count;
+  if ((result = bma423_step_counter_output(&step_count, &bma))) {
+    ESP_LOGW(TAG, "Reading step counter failed: bma423_step_counter_output %i\n", result);
+    return 0;
+  }
+  return step_count;
+}
+
+
+void accelerometer_test() {
   //soft reset first
   uint8_t data = BMA4_SOFT_RESET;
   accelerometer_i2c_write(BMA4_CMD_ADDR, &data, 1, nullptr);
@@ -72,7 +182,8 @@ void accelerometer_test() {
 
   struct bma4_accel_config accel_config;
 
-  accel_config.odr = BMA4_OUTPUT_DATA_RATE_100HZ;
+  // at least 200 Hz recommended for tap/double-tap
+  accel_config.odr = BMA4_OUTPUT_DATA_RATE_200HZ;
   accel_config.range = BMA4_ACCEL_RANGE_2G;
   accel_config.bandwidth = BMA4_ACCEL_NORMAL_AVG4;
   accel_config.perf_mode = BMA4_CIC_AVG_MODE;
@@ -82,22 +193,61 @@ void accelerometer_test() {
     return;
   }
 
+  struct bma423_axes_remap remap_data;
+
+  remap_data.x_axis = 1;
+  remap_data.x_axis_sign = 0xFF;
+  remap_data.y_axis = 0;
+  remap_data.y_axis_sign = 0xFF;
+  remap_data.z_axis = 2;
+  remap_data.z_axis_sign = 0xFF;
+
+  bma423_set_remap_axes(&remap_data, &bma);
+
+  bma423_get_remap_axes(&remap_data, &bma);
+
+  printf(
+      "remap_data.x_axis = %u\n"
+      "remap_data.x_axis_sign = %u\n"
+      "remap_data.y_axis = %u\n"
+      "remap_data.y_axis_sign = %u\n"
+      "remap_data.z_axis  = %u\n"
+      "remap_data.z_axis_sign  = %u\n",
+      remap_data.x_axis,
+      remap_data.x_axis_sign,
+      remap_data.y_axis,
+      remap_data.y_axis_sign,
+      remap_data.z_axis,
+      remap_data.z_axis_sign);
+
+
   if ((result = bma423_feature_enable(BMA423_STEP_CNTR, 1, &bma))) {
     printf("bma423_feature_enable %i\n", result);
     return;
   }
 
-  if ((result = bma423_feature_enable(BMA423_SINGLE_TAP, 1, &bma))) {
+  // if ((result = bma423_feature_enable(BMA423_SINGLE_TAP, 1, &bma))) {
+    // printf("bma423_feature_enable %i\n", result);
+    // return;
+  // }
+
+  // if ((result = bma423_single_tap_set_sensitivity(0, &bma))) {
+    // printf("bma423_single_tap_set_sensitivity %i\n", result);
+    // return;
+  // }
+
+  // if ((result = bma423_map_interrupt(BMA4_INTR1_MAP, BMA423_SINGLE_TAP_INT, 1, &bma))) {
+    // printf("bma423_map_interrupt %i\n", result);
+    // return;
+  // }
+
+
+  if ((result = bma423_feature_enable(BMA423_WRIST_WEAR, 1, &bma))) {
     printf("bma423_feature_enable %i\n", result);
     return;
   }
 
-  if ((result = bma423_single_tap_set_sensitivity(0, &bma))) {
-    printf("bma423_single_tap_set_sensitivity %i\n", result);
-    return;
-  }
-
-  if ((result = bma423_map_interrupt(BMA4_INTR1_MAP, BMA423_SINGLE_TAP_INT, 1, &bma))) {
+  if ((result = bma423_map_interrupt(BMA4_INTR1_MAP, BMA423_WRIST_WEAR_INT, 1, &bma))) {
     printf("bma423_map_interrupt %i\n", result);
     return;
   }
@@ -120,8 +270,8 @@ void accelerometer_test() {
       printf("bma423_read_int_status %i\n", result);
       return;
     }
-    if (int_status & BMA423_SINGLE_TAP_INT) {
-      printf("Single Tap!");
+    if (int_status & BMA423_WRIST_WEAR_INT) {
+      printf("Wrist Wear!");
     }
 
     printf("Step counter output: %u\n", step_out);
