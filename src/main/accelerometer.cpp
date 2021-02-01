@@ -3,6 +3,9 @@
 #include "freertos/FreeRTOS.h"
 #include <bma423.h>
 
+#include <driver/gpio.h>
+#include "constants.h"
+
 #include <Wire.h>
 
 #include <cmath>
@@ -60,7 +63,6 @@ bool accelerometer::init() {
   bma.feature_len = BMA423_FEATURE_SIZE;
 
   int16_t result;
-  // printf("NULL: %x, &bma: %x\n", &bma,);
   if((result = bma423_init(&bma))) {
     ESP_LOGE(TAG, "bma423_init failed %i\n", result);
     return false;
@@ -111,6 +113,7 @@ bool accelerometer::init() {
     return false;
   }
 
+
   // do a last error check
   struct bma4_err_reg error_reg;
   if((result = bma4_get_error_status(&error_reg, &bma))) {
@@ -128,15 +131,6 @@ bool accelerometer::init() {
   return true;
 }
 
-bool accelerometer::enableStepCounter() {
-  int16_t result;
-  if ((result = bma423_feature_enable(BMA423_STEP_CNTR, 1, &bma))) {
-    ESP_LOGE(TAG, "Enabling step counter failed: bma423_feature_enable %i\n", result);
-    return false;
-  }
-  return true;
-}
-
 uint32_t accelerometer::stepCount() {
   int16_t result;
   uint32_t step_count;
@@ -145,6 +139,45 @@ uint32_t accelerometer::stepCount() {
     return 0;
   }
   return step_count;
+}
+
+bool accelerometer::setFeature(uint8_t feature, bool enable) {
+  int16_t result;
+  if ((result = bma423_feature_enable(feature, enable ? 1 : 0, &bma))) {
+    ESP_LOGE(TAG, "bma423_feature_enable failed: %i\n", result);
+    return false;
+  }
+  return true;
+}
+
+bool accelerometer::setFeatureInterrupt(uint8_t int_line, uint8_t int_map, bool enable) {
+  int16_t result;
+
+  // First, configure the pin to interrupt output
+  struct bma4_int_pin_config int_config;
+  int_config.input_en = BMA4_INPUT_DISABLE;
+  int_config.output_en = BMA4_OUTPUT_ENABLE;
+  int_config.lvl = BMA4_ACTIVE_HIGH;
+  // internal pullup and pulldown resistors of ESP32 are disabled during deep sleep
+  // (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/sleep_modes.html#external-wakeup-ext1 )
+  // Therefore the BMA needs to use it's push-pull pin capability to ensure defined logic level
+  int_config.od = BMA4_PUSH_PULL;
+  int_config.edge_ctrl = BMA4_LEVEL_TRIGGER;
+  if((result = bma4_set_int_pin_config(&int_config, int_line, &bma))) {
+    ESP_LOGE(TAG, "bma4_set_int_pin_config failed: %i\n", result);
+    return false;
+  }
+
+  if ((result = bma423_map_interrupt(int_line, int_map, enable ? 1 : 0, &bma))) {
+    ESP_LOGE(TAG, "bma423_map_interrupt failed: %i\n", result);
+    return false;
+  }
+  return true;
+}
+
+void accelerometer::clearInterrupts() {
+  uint16_t intr_status;
+  bma423_read_int_status(&intr_status, &bma);
 }
 
 
@@ -161,8 +194,9 @@ void accelerometer_test() {
   bma.resolution = 12;
   bma.bus_read = accelerometer_i2c_read;
   bma.bus_write = accelerometer_i2c_write;
-  bma.feature_len = BMA423_FEATURE_SIZE;
   bma.delay_us = accelerometer_delay_us;
+  bma.feature_len = BMA423_FEATURE_SIZE;
+  bma.intf_ptr = &bma;
 
   int16_t result;
   if((result = bma423_init(&bma))) {
@@ -174,6 +208,7 @@ void accelerometer_test() {
     printf("bma423_write_config_file %i\n", result);
     return;
   }
+
 
   if ((result = bma4_set_accel_enable(1, &bma))) {
     printf("bma4_set_accel_enable %i\n", result);
@@ -247,6 +282,22 @@ void accelerometer_test() {
     return;
   }
 
+
+  // First, configure the pin to interrupt output
+  struct bma4_int_pin_config int_config;
+  int_config.input_en = BMA4_INPUT_DISABLE;
+  int_config.output_en = BMA4_OUTPUT_ENABLE;
+  int_config.lvl = BMA4_ACTIVE_HIGH;
+  // internal pullup and pulldown resistors of ESP32 are disabled during deep sleep
+  // (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/sleep_modes.html#external-wakeup-ext1 )
+  // Therefore the BMA needs to use it's push-pull pin capability to ensure defined logic level
+  int_config.od = BMA4_PUSH_PULL;
+  int_config.edge_ctrl = BMA4_LEVEL_TRIGGER;
+  if((result = bma4_set_int_pin_config(&int_config, BMA4_INTR1_MAP, &bma))) {
+    printf("bma4_set_int_pin_config failed: %i\n", result);
+    return;
+  }
+
   if ((result = bma423_map_interrupt(BMA4_INTR1_MAP, BMA423_WRIST_WEAR_INT, 1, &bma))) {
     printf("bma423_map_interrupt %i\n", result);
     return;
@@ -256,6 +307,16 @@ void accelerometer_test() {
     // printf("bma423_step_counter_set_watermark %i\n", result);
     // return;
   // }
+  
+  gpio_config_t pin_config;
+  pin_config.pin_bit_mask = ACC_INT_1_MASK;
+  pin_config.mode = GPIO_MODE_INPUT;
+  pin_config.pull_up_en = GPIO_PULLUP_DISABLE;
+  pin_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  pin_config.intr_type = GPIO_INTR_DISABLE;
+
+  gpio_config(&pin_config);
+
 
   printf("Waiting for step counts!!!\n");
   for(int i = 0; i < 100; i++) {
@@ -265,6 +326,7 @@ void accelerometer_test() {
       return;
     }
 
+    printf("INTR: %i\n", gpio_get_level(ACC_INT_1_GPIO));
     uint16_t int_status;
     if ((result = bma423_read_int_status(&int_status, &bma))) {
       printf("bma423_read_int_status %i\n", result);
@@ -278,3 +340,4 @@ void accelerometer_test() {
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
+
