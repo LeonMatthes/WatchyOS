@@ -63,7 +63,7 @@ void initBMA() {
     display.hibernate();
 
     fflush(stdout);
-    // deep sleep without wakeup source to display further bootup
+    // deep sleep without wakeup source to disallow further bootup
     esp_deep_sleep_start();
   }
 }
@@ -132,7 +132,7 @@ void app_main(void)
 
   initArduino();
   Wire.begin(SDA_PIN, SCL_PIN);
-  Wire.setClock(400000);
+  Wire.setClock(400'000);
 
   display.init(0, false);
 
