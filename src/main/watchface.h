@@ -1,5 +1,7 @@
 #pragma once
 
+#include "screens.h"
+
 namespace watchface {
-  void update(bool partial_refresh = true);
+  screens::Screen update(bool partial_refresh = true);
 }

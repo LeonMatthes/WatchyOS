@@ -61,7 +61,16 @@ void drawStepCount() {
   }
 }
 
-void watchface::update(bool partial_refresh /*= true*/) {
+using namespace screens;
+
+#include "constants.h"
+
+Screen watchface::update(bool partial_refresh /*= true*/) {
+  if((esp_sleep_get_ext1_wakeup_status() & MENU_BTN_MASK)
+      || (rtc::currentTime.Hour == 1 && rtc::currentTime.Minute == 0)) {
+    return NAP;
+  }
+
   display.fillScreen(GxEPD_BLACK);
 
   display.setTextColor(GxEPD_WHITE);
@@ -74,6 +83,7 @@ void watchface::update(bool partial_refresh /*= true*/) {
 
   display.display(partial_refresh);
   display.hibernate();
+  return WATCHFACE;
 }
 
 

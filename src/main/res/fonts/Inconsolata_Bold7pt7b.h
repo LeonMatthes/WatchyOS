@@ -1,6 +1,6 @@
 #include <gfxfont.h>
 
-const uint8_t Inconsolata_Bold7pt7bBitmaps[] PROGMEM = {
+const uint8_t Inconsolata_Bold7pt7bBitmaps[] = {
   0x00, 0x7D, 0x54, 0xF0, 0x5A, 0xD7, 0xA0, 0x3C, 0x5B, 0xF9, 0x42, 0xBF,
   0x9A, 0x34, 0x78, 0x21, 0xEE, 0xB8, 0xF0, 0xE2, 0xEA, 0xF8, 0x80, 0x67,
   0xFA, 0xE3, 0xC1, 0x07, 0x8F, 0xBD, 0xCC, 0x38, 0xD1, 0xA1, 0xC3, 0x0B,
@@ -51,7 +51,7 @@ const uint8_t Inconsolata_Bold7pt7bBitmaps[] PROGMEM = {
   0xCC, 0x21, 0x8C, 0x63, 0x0E, 0xFF, 0xF0, 0xE1, 0x8C, 0x61, 0x88, 0xC6,
   0x31, 0xB8, 0x77, 0xB8 };
 
-const GFXglyph Inconsolata_Bold7pt7bGlyphs[] PROGMEM = {
+const GFXglyph Inconsolata_Bold7pt7bGlyphs[] = {
   {     0,   1,   1,   7,    0,    0 },   // 0x20 ' '
   {     1,   2,  10,   7,    2,   -9 },   // 0x21 '!'
   {     4,   5,   4,   7,    1,   -9 },   // 0x22 '"'
@@ -148,7 +148,7 @@ const GFXglyph Inconsolata_Bold7pt7bGlyphs[] PROGMEM = {
   {   571,   5,  11,   7,    1,   -8 },   // 0x7D '}'
   {   578,   7,   2,   7,    0,   -6 } }; // 0x7E '~'
 
-const GFXfont Inconsolata_Bold7pt7b PROGMEM = {
+const GFXfont Inconsolata_Bold7pt7b = {
   (uint8_t  *)Inconsolata_Bold7pt7bBitmaps,
   (GFXglyph *)Inconsolata_Bold7pt7bGlyphs,
   0x20, 0x7E, 14 };
