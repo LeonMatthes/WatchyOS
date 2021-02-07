@@ -4,11 +4,12 @@
 
 namespace rtc {
   extern DS3232RTC RTC;
-  extern tmElements_t currentTime;
 
   void init();
 
-  void updateTime();
+  void setTime(tmElements_t newTime);
+
+  tmElements_t currentTime();
 
   void resetAlarm();
 }

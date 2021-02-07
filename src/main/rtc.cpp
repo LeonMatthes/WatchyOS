@@ -2,7 +2,6 @@
 using namespace rtc;
 
 DS3232RTC rtc::RTC(false);
-tmElements_t rtc::currentTime;
 
 time_t compileTime()
 {
@@ -31,11 +30,19 @@ void rtc::init() {
   RTC.set(compileTime());
   RTC.setAlarm(ALM2_EVERY_MINUTE, 0, 0, 0, 0);
   RTC.alarmInterrupt(ALARM_2, true);
+  tmElements_t currentTime;
   RTC.read(currentTime);
+  ESP_LOGI("RTC", "Time set to: %i:%i\n", currentTime.Hour, currentTime.Minute);
 }
 
-void rtc::updateTime() {
-  RTC.read(currentTime);
+void rtc::setTime(tmElements_t newTime) {
+  RTC.set(makeTime(newTime));
+}
+
+tmElements_t rtc::currentTime() {
+  tmElements_t now{};
+  RTC.read(now);
+  return now;
 }
 
 void rtc::resetAlarm() {

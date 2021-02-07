@@ -9,6 +9,7 @@ using namespace rtc;
 
 #include "accelerometer.h"
 #include "battery.h"
+#include "ble/update_time.h"
 
 #include "res/icons.h"
 #include "res/nums.h"
@@ -26,9 +27,10 @@ void drawBattery() {
   display.println("V");
 }
 
-void drawDate() {
+void drawDate(const tmElements_t& now) {
+
   std::ostringstream dateStream;
-  dateStream << currentTime.Day / 10 << currentTime.Day % 10 << "." << currentTime.Month / 10 << currentTime.Month % 10 << ".";
+  dateStream << now.Day / 10 << now.Day % 10 << "." << now.Month / 10 << now.Month % 10 << ".";
   std::string date = dateStream.str();
 
   int16_t x1, y1;
@@ -38,11 +40,11 @@ void drawDate() {
   display.print(date.c_str());
 }
 
-void drawTime() {
-  display.drawBitmap(67, 25, nums[currentTime.Hour / 10], 30, 60, GxEPD_WHITE);
-  display.drawBitmap(103, 25, nums[currentTime.Hour % 10], 30, 60, GxEPD_WHITE);
-  display.drawBitmap(67, 90, nums[currentTime.Minute / 10], 30, 60, GxEPD_WHITE);
-  display.drawBitmap(103, 90, nums[currentTime.Minute % 10], 30, 60, GxEPD_WHITE);
+void drawTime(const tmElements_t& now) {
+  display.drawBitmap(67, 25, nums[now.Hour / 10], 30, 60, GxEPD_WHITE);
+  display.drawBitmap(103, 25, nums[now.Hour % 10], 30, 60, GxEPD_WHITE);
+  display.drawBitmap(67, 90, nums[now.Minute / 10], 30, 60, GxEPD_WHITE);
+  display.drawBitmap(103, 90, nums[now.Minute % 10], 30, 60, GxEPD_WHITE);
 }
 
 void drawStepCount() {
@@ -65,9 +67,18 @@ using namespace screens;
 
 #include "constants.h"
 
-Screen watchface::update(bool partial_refresh /*= true*/) {
-  if((esp_sleep_get_ext1_wakeup_status() & MENU_BTN_MASK)
-      || (rtc::currentTime.Hour == 1 && rtc::currentTime.Minute == 0)) {
+Screen watchface::update(bool wakeFromSleep /*= true*/) {
+  if(wakeFromSleep && (esp_sleep_get_ext1_wakeup_status() & MENU_BTN_MASK)) {
+    return MENU;
+  }
+
+  if(wakeFromSleep) {
+    ble::updateTime();
+  }
+
+  tmElements_t now = rtc::currentTime();
+
+  if(wakeFromSleep && now.Hour == 1 && now.Minute == 0) {
     return NAP;
   }
 
@@ -77,11 +88,11 @@ Screen watchface::update(bool partial_refresh /*= true*/) {
   display.setFont(&watchface_font8pt7b);
 
   drawBattery();
-  drawDate();
-  drawTime();
+  drawDate(now);
+  drawTime(now);
   drawStepCount();
 
-  display.display(partial_refresh);
+  display.display(wakeFromSleep);
   display.hibernate();
   return WATCHFACE;
 }

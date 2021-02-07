@@ -5,16 +5,23 @@
 #include <functional>
 
 #include "watchface.h"
+#include "boot.h"
+
+#include "screens_menu.h"
+#include "testing.h"
 
 using namespace screens;
 
 Screen takeNap(bool wake_from_sleep);
 
-RTC_DATA_ATTR Screen screens::current = WATCHFACE;
+RTC_DATA_ATTR Screen screens::current = BOOT;
 
 const std::function<Screen(bool)> screenFunctions[] = {
   watchface::update,
-  takeNap
+  takeNap,
+  screensMenu,
+  testScreen,
+  bootScreen,
 };
 
 
@@ -28,15 +35,15 @@ void screens::dispatch(bool wakeFromSleep) {
   while(next != current);
 }
 
-#include "constants.h"
+#include <constants.h>
 
-#include "res/fonts/Inconsolata_Bold7pt7b.h"
-#include "res/icons.h"
-#include "e_ink.h"
+#include <res/fonts/Inconsolata_Bold7pt7b.h>
+#include <res/icons.h>
+#include <e_ink.h>
 using namespace e_ink;
 
-#include "rtc.h"
-#include "accelerometer.h"
+#include <rtc.h>
+#include <accelerometer.h>
 
 Screen takeNap(bool wake_from_sleep = false) {
   if(wake_from_sleep) {
@@ -76,4 +83,33 @@ Screen takeNap(bool wake_from_sleep = false) {
   fflush(stdout);
   esp_sleep_enable_ext1_wakeup(BTN_PIN_MASK, ESP_EXT1_WAKEUP_ANY_HIGH);
   esp_deep_sleep_start();
+}
+
+#include "res/fonts/watchface_font8pt7b.h"
+#include <sstream>
+
+int16_t screens::drawHeader() {
+  tmElements_t now = rtc::currentTime();
+  display.setTextColor(FG_COLOR);
+  display.setFont(&watchface_font8pt7b);
+  display.setCursor(5, 15);
+
+  std::ostringstream timeStream;
+  timeStream << now.Hour / 10 << now.Hour % 10 << ":" << now.Minute / 10 << now.Minute % 10;
+  display.print(timeStream.str().c_str());
+
+
+  std::ostringstream dateStream;
+  dateStream << now.Day / 10 << now.Day % 10 << "." << now.Month / 10 << now.Month % 10 << ".";
+  std::string date = dateStream.str();
+
+  int16_t x1, y1;
+  uint16_t w, h;
+  display.getTextBounds(date.c_str(), 10, 50, &x1, &y1, &w, &h);
+  display.setCursor(195 - w, 15);
+  display.print(date.c_str());
+
+  display.drawFastHLine(0, 20, 200, FG_COLOR); 
+
+  return 20;
 }
