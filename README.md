@@ -20,6 +20,15 @@ To get started, please install the [ESP IDF](https://docs.espressif.com/projects
 - Stretch goals
 	- Shortcut Tapping
 
+## Getting started
+After installing ESP-IDF v4.2, connect your Watchy, go into the `src` folder of this repo and run `make -p [PORT] flash monitor`.
+Where `[PORT]` is the port of your Watchy. A description of how to find this port is in the ESP-IDF Guide: [Connect your device](https://docs.espressif.com/projects/esp-idf/en/v4.2/esp32/get-started/index.html#step-6-connect-your-device).
+
+Your Watchy should now boot WatchyOS.
+
+If you want to have a connection to your phone, install Android studio and flash the WatchyOSCompanionApp onto your phone.
+This is highly experimental at the moment.
+
 ### GUI Mockup
 ![GUI Mockup](https://github.com/LeonMatthes/WatchyOS/raw/main/res/gui-mockup.jpg)
 

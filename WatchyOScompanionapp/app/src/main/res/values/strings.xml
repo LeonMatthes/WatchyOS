@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">WatchyOS companion app</string>
+    <string name="conn_not_title">Watchy connection</string>
+    <string name="conn_not_text">Keeping your Watchy up to date</string>
 </resources>

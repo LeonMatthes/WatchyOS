@@ -11,14 +11,17 @@
 
 #include "../rtc.h"
 
-#define SERVICE_UUID        "f9ce43b7-d389-4add-adf7-82811c462ca1"
-#define CHARACTERISTIC_UUID "e7e3232e-88c0-452f-abd1-003cc2ec24d3"
+#define WATCHYOS_SERVICE_UUID        "f9ce43b7-d389-4add-adf7-82811c462ca1"
+#define TIME_CHARACTERISTIC_UUID "e7e3232e-88c0-452f-abd1-003cc2ec24d3"
+#define NOTIFICATIONS_CHARACTERISTIC_UUID "0e207741-1657-4e87-9415-ca2a67af12e5"
 
 const char* TAG = "BLE";
 
-class CharacteristicCallbacks : public BLECharacteristicCallbacks {
+uint8_t ble::notifications = 0;
+
+class TimeCharacteristicCallbacks : public BLECharacteristicCallbacks {
   public:
-    virtual ~CharacteristicCallbacks() {}
+    virtual ~TimeCharacteristicCallbacks() {}
 
     virtual void onWrite(BLECharacteristic* characteristic) override {
       std::string value = characteristic->getValue();
@@ -38,6 +41,22 @@ class CharacteristicCallbacks : public BLECharacteristicCallbacks {
       }
       else {
         ESP_LOGW(TAG, "Received invalid new time of %i bytes", value.size());
+      }
+    }
+};
+
+class NotificationCharacteristicCallbacks : public BLECharacteristicCallbacks {
+  public:
+    virtual ~NotificationCharacteristicCallbacks() {}
+
+    virtual void onWrite(BLECharacteristic* characteristic) override {
+      std::string value = characteristic->getValue();
+      if(1 == value.size()){
+        ble::notifications = static_cast<uint8_t>(value[0]);
+        ESP_LOGI(TAG, "Successfully updated notifications from Phone");
+      }
+      else {
+        ESP_LOGW(TAG, "Received invalid new notifications of %i bytes", value.size());
       }
     }
 };
@@ -63,24 +82,33 @@ class ServerCallbacks : public BLEServerCallbacks {
 
 bool ble::updateTime(int64_t timeout/* = 3'000'000*/) {
   ServerCallbacks callbacks;
-  CharacteristicCallbacks characteristicCB;
+  TimeCharacteristicCallbacks timeCB;
+  NotificationCharacteristicCallbacks notificationCB;
 
   BLEDevice::init("WatchyOS");
   BLEServer *pServer = BLEDevice::createServer();
   pServer->setCallbacks(&callbacks);
-  BLEService *pService = pServer->createService(SERVICE_UUID);
+  BLEService *pService = pServer->createService(WATCHYOS_SERVICE_UUID);
   BLECharacteristic *pCharacteristic = pService->createCharacteristic(
-                                         CHARACTERISTIC_UUID,
+                                         TIME_CHARACTERISTIC_UUID,
                                          BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR
                                        );
   pCharacteristic->setWriteNoResponseProperty(true);
   pCharacteristic->setWriteProperty(true);
-  pCharacteristic->setCallbacks(&characteristicCB);
+  pCharacteristic->setCallbacks(&timeCB);
+
+  BLECharacteristic *notificationChar = pService->createCharacteristic(
+                                         NOTIFICATIONS_CHARACTERISTIC_UUID,
+                                         BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR
+                                       );
+  notificationChar->setWriteNoResponseProperty(true);
+  notificationChar->setWriteProperty(true);
+  notificationChar->setCallbacks(&notificationCB);
 
   pService->start();
   // BLEAdvertising *pAdvertising = pServer->getAdvertising();  // this still is working for backward compatibility
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->addServiceUUID(WATCHYOS_SERVICE_UUID);
   pAdvertising->setScanResponse(true);
   pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
   pAdvertising->setMinPreferred(0x12);

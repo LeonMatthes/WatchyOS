@@ -78,10 +78,10 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         testButton.setOnClickListener { test() }
-        /*if(!isNotificationServiceEnabled()) {
+        if(!isNotificationServiceEnabled()) {
             Log.d("Watchy", "Asking for Notification Listener approval")
             startActivity(Intent(ACTION_NOTIFICATION_LISTENER_SETTINGS))
-        }*/
+        }
     }
 
     private var isScanning = false

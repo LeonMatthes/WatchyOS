@@ -19,8 +19,8 @@ using namespace rtc;
 #include <sstream>
 
 void drawBattery() {
-  display.drawBitmap(5, 5, icon_battery, 45, 15, GxEPD_WHITE);
-  display.fillRect(8, 8, 37 * batteryPercentage(), 9, GxEPD_WHITE);
+  display.drawBitmap(5, 5, icon_battery, 45, 15, FG_COLOR);
+  display.fillRect(8, 8, 37 * batteryPercentage(), 9, FG_COLOR);
 
   display.setCursor(55, 19);
   display.print(batteryVoltage());
@@ -41,14 +41,14 @@ void drawDate(const tmElements_t& now) {
 }
 
 void drawTime(const tmElements_t& now) {
-  display.drawBitmap(67, 25, nums[now.Hour / 10], 30, 60, GxEPD_WHITE);
-  display.drawBitmap(103, 25, nums[now.Hour % 10], 30, 60, GxEPD_WHITE);
-  display.drawBitmap(67, 90, nums[now.Minute / 10], 30, 60, GxEPD_WHITE);
-  display.drawBitmap(103, 90, nums[now.Minute % 10], 30, 60, GxEPD_WHITE);
+  display.drawBitmap(67, 25, nums[now.Hour / 10], 30, 60, FG_COLOR);
+  display.drawBitmap(103, 25, nums[now.Hour % 10], 30, 60, FG_COLOR);
+  display.drawBitmap(67, 90, nums[now.Minute / 10], 30, 60, FG_COLOR);
+  display.drawBitmap(103, 90, nums[now.Minute % 10], 30, 60, FG_COLOR);
 }
 
 void drawStepCount() {
-  display.drawBitmap(54, 180, icon_steps, 13, 15, GxEPD_WHITE);
+  display.drawBitmap(54, 180, icon_steps, 13, 15, FG_COLOR);
 
   uint32_t stepCount = accelerometer::stepCount();
   std::string steps = std::to_string(stepCount);
@@ -59,7 +59,14 @@ void drawStepCount() {
   display.println(steps.c_str());
 
   if(stepCount >= 10000) {
-    display.drawBitmap(131, 180, icon_star, 15, 15, GxEPD_WHITE);
+    display.drawBitmap(131, 180, icon_star, 15, 15, FG_COLOR);
+  }
+}
+
+void drawNotifications() {
+  using namespace ble;
+  if(notifications & Notifications::WHATSAPP) {
+    display.drawBitmap(90, 155, icon_whatsapp, 20, 20, FG_COLOR);
   }
 }
 
@@ -82,15 +89,16 @@ Screen watchface::update(bool wakeFromSleep /*= true*/) {
     return NAP;
   }
 
-  display.fillScreen(GxEPD_BLACK);
+  display.fillScreen(BG_COLOR);
 
-  display.setTextColor(GxEPD_WHITE);
+  display.setTextColor(FG_COLOR);
   display.setFont(&watchface_font8pt7b);
 
   drawBattery();
   drawDate(now);
   drawTime(now);
   drawStepCount();
+  drawNotifications();
 
   display.display(wakeFromSleep);
   display.hibernate();
