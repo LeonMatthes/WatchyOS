@@ -1,6 +1,6 @@
 # WatchyOS
 
-An easy operating system for [Watchy](https://github.com/sqfmi/Watchy).
+A simple operating system for [Watchy](https://github.com/sqfmi/Watchy).
 
 To get started, please install the [ESP IDF](https://docs.espressif.com/projects/esp-idf/en/v4.2/esp32/get-started/index.html) (version 4.2)
 
