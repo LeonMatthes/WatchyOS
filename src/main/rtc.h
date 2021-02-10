@@ -5,6 +5,8 @@
 namespace rtc {
   extern DS3232RTC RTC;
 
+  extern bool initialized;
+
   void init();
 
   void setTime(tmElements_t newTime);

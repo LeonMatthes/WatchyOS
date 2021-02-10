@@ -14,10 +14,11 @@
 #define WATCHYOS_SERVICE_UUID        "f9ce43b7-d389-4add-adf7-82811c462ca1"
 #define TIME_CHARACTERISTIC_UUID "e7e3232e-88c0-452f-abd1-003cc2ec24d3"
 #define NOTIFICATIONS_CHARACTERISTIC_UUID "0e207741-1657-4e87-9415-ca2a67af12e5"
+#define STATE_CHARACTERISTIC_UUID "54ea5218-bcc6-4870-baa9-06f25ab86b32"
 
 const char* TAG = "BLE";
 
-uint8_t ble::notifications = 0;
+RTC_DATA_ATTR uint8_t ble::notifications = 0;
 
 class TimeCharacteristicCallbacks : public BLECharacteristicCallbacks {
   public:
@@ -37,6 +38,7 @@ class TimeCharacteristicCallbacks : public BLECharacteristicCallbacks {
           .Year = static_cast<uint8_t>(value[0]) // offset from 1970
         };
         rtc::setTime(newTime);
+        rtc::initialized = true;
         ESP_LOGI(TAG, "Successfully updated time from Phone");
       }
       else {
@@ -80,7 +82,7 @@ class ServerCallbacks : public BLEServerCallbacks {
     }
 };
 
-bool ble::updateTime(int64_t timeout/* = 3'000'000*/) {
+bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* = 3'000'000*/) {
   ServerCallbacks callbacks;
   TimeCharacteristicCallbacks timeCB;
   NotificationCharacteristicCallbacks notificationCB;
@@ -104,6 +106,13 @@ bool ble::updateTime(int64_t timeout/* = 3'000'000*/) {
   notificationChar->setWriteNoResponseProperty(true);
   notificationChar->setWriteProperty(true);
   notificationChar->setCallbacks(&notificationCB);
+
+  uint8_t state = connectionState;
+  BLECharacteristic *stateCharacteristic = pService->createCharacteristic(
+                                          STATE_CHARACTERISTIC_UUID,
+                                          BLECharacteristic::PROPERTY_READ
+                                          );
+  stateCharacteristic->setValue(&state, 1);
 
   pService->start();
   // BLEAdvertising *pAdvertising = pServer->getAdvertising();  // this still is working for backward compatibility
@@ -135,7 +144,7 @@ bool ble::updateTime(int64_t timeout/* = 3'000'000*/) {
     vTaskDelay(1);
   }
 
-  ESP_LOGD(TAG, "BLE operation took %llims", (esp_timer_get_time() - begin_time) / 1'000);
+  ESP_LOGI(TAG, "BLE operation took %llims", (esp_timer_get_time() - begin_time) / 1'000);
 
   BLEDevice::stopAdvertising();
   BLEDevice::deinit();

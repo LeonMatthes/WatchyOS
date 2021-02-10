@@ -122,7 +122,7 @@ class MainActivity : AppCompatActivity() {
         textView.text = "Scanning for BLE devices"
 
         val filter = ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid.fromString(WATCHYOS_SERVICE_UUID))
+            .setServiceUuid(ParcelUuid(WATCHYOS_SERVICE_UUID))
             .build()
 
         val scanSettingsBuilder = ScanSettings.Builder()

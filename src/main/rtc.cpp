@@ -3,6 +3,8 @@ using namespace rtc;
 
 DS3232RTC rtc::RTC(false);
 
+RTC_DATA_ATTR bool rtc::initialized = false;
+
 time_t compileTime()
 {
   const time_t FUDGE(10);    //fudge factor to allow for upload time, etc. (seconds, YMMV)

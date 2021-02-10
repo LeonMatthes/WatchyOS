@@ -11,7 +11,7 @@ namespace screens {
     BOOT = 4,
   };
 
-  extern  Screen current;
+  extern Screen current;
 
   void dispatch(bool wakeFromSleep);
 

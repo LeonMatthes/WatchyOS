@@ -4,10 +4,6 @@ import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothProfile
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -16,73 +12,86 @@ import java.util.*
 
 private const val TAG = "WatchyGattCallback"
 
-class WatchyGattCallback() : BluetoothGattCallback() {
+class WatchyGattCallback(private val connectionService: WatchyConnectionService) : BluetoothGattCallback() {
 
     var gatt: BluetoothGatt? = null
 
-    var notification_bits : Byte = 0x00
-    var notifications_changed = false
+    var notificationBits : Byte = 0x00
+    var notificationsChanged = false
 
-    init {
-        val gattCallback = this
+    // warning! These queues will be reset on connect
+    private val writeQueue : Queue<BluetoothGattCharacteristic> = LinkedList<BluetoothGattCharacteristic>()
+    private val readQueue: Queue<BluetoothGattCharacteristic> = LinkedList<BluetoothGattCharacteristic>()
 
+    fun pushWrite(characteristic: BluetoothGattCharacteristic) {
+        writeQueue.add(characteristic)
     }
 
-    private fun writeTimeCharacteristic(gatt: BluetoothGatt) {
+    fun pushRead(characteristic: BluetoothGattCharacteristic) {
+        readQueue.add(characteristic)
+    }
+
+    private fun dispatch() {
+        val gatt = this.gatt ?: return
+
+        when {
+            !readQueue.isEmpty() -> gatt.readCharacteristic(readQueue.peek())
+            !writeQueue.isEmpty() -> gatt.writeCharacteristic(writeQueue.peek())
+            else -> gatt.disconnect()
+        }
+    }
+
+    fun getCharacteristic(characteristicUUID: UUID, serviceUUID: UUID = WATCHYOS_SERVICE_UUID): BluetoothGattCharacteristic? {
+        val gatt = this.gatt ?: return null
         if (gatt.services.isEmpty()) {
             Log.w(TAG, "No service and characteristic available, call discoverServices() first?")
-            return
+            return null
         }
 
-        val characteristic = gatt
-                .getService(UUID.fromString(WATCHYOS_SERVICE_UUID))
-                .getCharacteristic(UUID.fromString(WATCHYOS_TIME_CHARACTERISTIC_UUID))
-
-        characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-        val cal = Calendar.getInstance()
-        val payload = byteArrayOf(
-                (cal.get(Calendar.YEAR) - 1970).toByte(),
-                cal.get(Calendar.MONTH).toByte(),
-                cal.get(Calendar.DAY_OF_MONTH).toByte(),
-                cal.get(Calendar.DAY_OF_WEEK).toByte(), // Sunday == 1
-                cal.get(Calendar.HOUR_OF_DAY).toByte(),
-                cal.get(Calendar.MINUTE).toByte(),
-                cal.get(Calendar.SECOND).toByte()
-        )
-        characteristic.value = payload
-        gatt.writeCharacteristic(characteristic)
-        Log.d(TAG, "Writing date characteristic to value ${payload.joinToString()}")
-    }
-
-    private fun writeNotificationCharacteristic(gatt: BluetoothGatt) {
-        if(gatt.services.isEmpty()) {
-            Log.w(TAG, "No service and characteristic available, call discoverServices() first?")
-            return
-        }
-
-        val characteristic = gatt
-                .getService(UUID.fromString(WATCHYOS_SERVICE_UUID))
-                .getCharacteristic(UUID.fromString(WATCHYOS_NOTIFICATIONS_CHARACTERISTIC_UUID))
-
-        characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-        characteristic.value = byteArrayOf(notification_bits)
-        gatt.writeCharacteristic(characteristic)
+        return gatt.getService(serviceUUID)?.getCharacteristic(characteristicUUID)
     }
 
     override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
         super.onCharacteristicWrite(gatt, characteristic, status)
-        if(status == BluetoothGatt.GATT_SUCCESS) {
-            Log.d(TAG, "Successfully wrote characteristic")
-            gatt.disconnect()
 
-            if(characteristic.uuid.equals(UUID.fromString(WATCHYOS_NOTIFICATIONS_CHARACTERISTIC_UUID))) {
-                notifications_changed = false
-                Log.d(TAG, "Successfully wrote characteristic")
+        if(writeQueue.peek()?.uuid == characteristic.uuid) {
+            if(status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d(TAG, "Successfully wrote characteristic: ${characteristic.uuid}")
+
+                writeQueue.remove()
+                dispatch()
+            }
+            else {
+                Log.w(TAG, "Characteristic write failed with status: $status! Retrying once...")
+                gatt.writeCharacteristic(writeQueue.remove())
             }
         }
         else {
-            Log.d(TAG, "Characteristic write failed with status: $status! Retrying")
-            writeTimeCharacteristic(gatt)
+            Log.w(TAG, "wrote non-queued characteristic: ${characteristic.uuid}")
+        }
+    }
+
+    override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+        super.onCharacteristicRead(gatt, characteristic, status)
+
+        if(readQueue.peek()?.uuid == characteristic.uuid) {
+            when (status) {
+                BluetoothGatt.GATT_SUCCESS -> {
+                    Log.d(TAG, "Successfully read characteristic: ${characteristic.uuid}")
+
+                    connectionService.onCharacteristicRead(characteristic)
+                    readQueue.remove()
+                    dispatch()
+                }
+                BluetoothGatt.GATT_READ_NOT_PERMITTED -> {
+                    Log.w(TAG, "Read of non-readable characteristic: ${characteristic.uuid}")
+                    readQueue.remove()
+                }
+                else -> {
+                    Log.w(TAG, "Read of ${characteristic.uuid} returned with status: $status, retrying one more time...")
+                    gatt.readCharacteristic(readQueue.remove())
+                }
+            }
         }
     }
 
@@ -106,7 +115,17 @@ class WatchyGattCallback() : BluetoothGattCallback() {
             Log.w(TAG, "Discovered ${services.size} services for ${device.address}")
             printGattTable()
         }
-        writeTimeCharacteristic(gatt)
+        successfullyConnected()
+    }
+
+    private fun successfullyConnected() {
+        readQueue.clear()
+        writeQueue.clear()
+        val characteristic = getCharacteristic(WATCHYOS_STATE_CHARACTERISTIC_UUID)
+        if (characteristic != null) {
+            readQueue.add(characteristic)
+        }
+        dispatch()
     }
 
     override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
@@ -121,12 +140,7 @@ class WatchyGattCallback() : BluetoothGattCallback() {
                     }
                 }
                 else {
-                    if(notifications_changed) {
-                        writeNotificationCharacteristic(gatt)
-                    }
-                    else {
-                        writeTimeCharacteristic(gatt)
-                    }
+                    successfullyConnected()
                 }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 SystemClock.sleep(10000)
@@ -137,6 +151,12 @@ class WatchyGattCallback() : BluetoothGattCallback() {
             Log.d(TAG, "Error: $status, $newState - Reconnecting")
             gatt.disconnect()
             gatt.connect()
+
         }
+    }
+
+    fun stop() {
+        gatt?.disconnect()
+        gatt?.close()
     }
 }

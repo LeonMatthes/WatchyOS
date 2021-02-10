@@ -12,7 +12,7 @@ import javax.net.ssl.SSLEngineResult
 
 private const val TAG = "WatchyNotifiListener"
 
-class WatchyNotificationListener : NotificationListenerService() {
+class NotificationListener : NotificationListenerService() {
     private val WHATSAPP_PACKAGE_NAME = "com.whatsapp"
 
     private var bound = false
@@ -48,20 +48,16 @@ class WatchyNotificationListener : NotificationListenerService() {
         if(!bound) {
             return
         }
-        Log.d(TAG, "Notification posted")
+        Log.d(TAG, "Notification posted: ${sbn.packageName}")
 
-        if(sbn.packageName == WHATSAPP_PACKAGE_NAME) {
-            sendNotificationUpdate()
-        }
+        sendNotificationUpdate()
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         super.onNotificationRemoved(sbn)
         Log.d(TAG, "Notification removed")
 
-        if(sbn.packageName == WHATSAPP_PACKAGE_NAME) {
-            sendNotificationUpdate()
-        }
+        sendNotificationUpdate()
     }
 
     private fun sendNotificationUpdate() {

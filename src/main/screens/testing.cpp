@@ -49,7 +49,7 @@ screens::Screen testScreen(bool wakeFromSleep) {
   display.display();
   display.hibernate();
 
-  ble::updateTime(10'000'000);
+  ble::updateTime(ble::REBOOT, 10'000'000);
 
   // ServerCallbacks callbacks;
 

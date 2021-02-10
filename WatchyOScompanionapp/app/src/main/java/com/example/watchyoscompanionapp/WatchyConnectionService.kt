@@ -5,7 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothGattCallback
+import android.bluetooth.BluetoothGattCharacteristic
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import java.util.*
 
 private val CHANNEL_ID = "ForegroundServiceChannel"
 
@@ -23,7 +24,12 @@ class WatchyConnectionService : Service() {
 
     val SERVICE_ID = 1
 
-    var gattCallback = WatchyGattCallback()
+    var gattCallback = WatchyGattCallback(this)
+
+    var notificationBits : Byte = 0x00
+    var notificationsChanged = false
+
+    var receiver: BroadcastReceiver? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -46,14 +52,15 @@ class WatchyConnectionService : Service() {
         val bleDevice: BluetoothDevice = intent.getParcelableExtra("WatchyBLEDevice")!!
         bleDevice.connectGatt(this, false, gattCallback)
 
-        val receiver = object : BroadcastReceiver() {
+        receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent) {
                 Log.d(TAG, "Received intent")
 
                 if(intent.hasExtra("notifications")) {
-                    gattCallback.notification_bits = intent.getByteExtra("notifications", 0x00)
-                    gattCallback.notifications_changed = true
-                    Log.d(TAG, "Notifications: ${gattCallback.notification_bits}")
+                    val newNotificationBits = intent.getByteExtra("notifications", 0x00)
+                    notificationsChanged = newNotificationBits != notificationBits
+                    notificationBits = newNotificationBits
+                    Log.d(TAG, "Notifications: ${gattCallback.notificationBits}")
                 }
             }
         }
@@ -67,11 +74,75 @@ class WatchyConnectionService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
-        gattCallback.gatt?.close()
+        if(receiver != null) {
+            unregisterReceiver(receiver)
+        }
+        gattCallback.stop()
     }
 
     override fun onBind(intent: Intent?): IBinder? {
         return null
+    }
+
+    private fun writeTimeCharacteristic() {
+        val characteristic = gattCallback.getCharacteristic(WATCHYOS_TIME_CHARACTERISTIC_UUID) ?: return
+
+        characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+        val cal = Calendar.getInstance()
+        val payload = byteArrayOf(
+                (cal.get(Calendar.YEAR) - 1970).toByte(),
+                (cal.get(Calendar.MONTH) + 1).toByte(),
+                cal.get(Calendar.DAY_OF_MONTH).toByte(),
+                cal.get(Calendar.DAY_OF_WEEK).toByte(), // Sunday == 1
+                cal.get(Calendar.HOUR_OF_DAY).toByte(),
+                cal.get(Calendar.MINUTE).toByte(),
+                cal.get(Calendar.SECOND).toByte()
+        )
+        characteristic.value = payload
+        gattCallback.pushWrite(characteristic)
+        Log.d(TAG, "Writing date characteristic to value ${payload.joinToString()}")
+    }
+
+    private fun writeNotificationCharacteristic() {
+        val characteristic = gattCallback.getCharacteristic(WATCHYOS_NOTIFICATIONS_CHARACTERISTIC_UUID) ?: return
+
+        characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+        characteristic.value = byteArrayOf(notificationBits)
+        gattCallback.pushWrite(characteristic)
+    }
+
+    private fun stateRead(characteristic: BluetoothGattCharacteristic) {
+        val value = characteristic.value
+        if(value.size != 1) {
+            Log.e(TAG, "WatchyOS State characteristic has unsupported value size: ${value.size}")
+            return
+        }
+        when(value.first()) {
+            WatchyBLEState.REBOOT.state -> {
+                writeNotificationCharacteristic()
+                writeTimeCharacteristic()
+                // TODO - is there a better way to make sure it was actually written?
+                notificationsChanged = false
+            }
+            WatchyBLEState.FAST_UPDATE.state -> {
+                if(notificationsChanged) {
+                    writeNotificationCharacteristic()
+                    // TODO - is there a better way to make sure it was actually written?
+                    notificationsChanged = false
+                }
+            }
+            else -> {
+                Log.w(TAG, "WatchyOS State characteristic has unsupported value: ${value.first()}")
+                return
+            }
+        }
+    }
+
+    fun onCharacteristicRead(characteristic: BluetoothGattCharacteristic) {
+        when(characteristic.uuid) {
+            WATCHYOS_STATE_CHARACTERISTIC_UUID -> stateRead(characteristic)
+            else -> return
+        }
     }
 
     private fun createNotificationChannel() {

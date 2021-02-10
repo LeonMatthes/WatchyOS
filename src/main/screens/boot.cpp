@@ -56,7 +56,7 @@ screens::Screen bootScreen(bool _wakeFromSleep) {
 
   display.print("Connecting to phone...");
   display.display(true);
-  bool timeUpdated = ble::updateTime(30'000'000 /*ns*/);
+  bool timeUpdated = ble::updateTime(ble::REBOOT, 30'000'000 /*ns*/);
   display.println(timeUpdated ? "Done" : "Failed");
   display.display(true);
 

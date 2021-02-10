@@ -32,7 +32,7 @@
             </intent-filter>
         </activity>
 
-        <service android:name=".WatchyNotificationListener"
+        <service android:name=".NotificationListener"
             android:label="Manage Notifications with Watchy"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>

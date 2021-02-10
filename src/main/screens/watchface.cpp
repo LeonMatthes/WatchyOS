@@ -80,7 +80,8 @@ Screen watchface::update(bool wakeFromSleep /*= true*/) {
   }
 
   if(wakeFromSleep) {
-    ble::updateTime();
+    // REBOOT will also update time, not just notifications
+    ble::updateTime(rtc::initialized ? ble::FAST_UPDATE : ble::REBOOT);
   }
 
   tmElements_t now = rtc::currentTime();
