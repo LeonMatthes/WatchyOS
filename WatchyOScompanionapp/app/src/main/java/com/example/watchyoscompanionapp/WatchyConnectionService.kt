@@ -14,6 +14,8 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationCompat.PRIORITY_LOW
+import androidx.core.app.NotificationCompat.PRIORITY_MIN
 import java.util.*
 
 private val CHANNEL_ID = "ForegroundServiceChannel"
@@ -45,6 +47,7 @@ class WatchyConnectionService : Service() {
                 .setContentText(getString(R.string.conn_not_text))
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentIntent(pendingIntent)
+                .setPriority(PRIORITY_LOW)
                 .build()
 
         startForeground(SERVICE_ID, notification)
@@ -56,11 +59,11 @@ class WatchyConnectionService : Service() {
             override fun onReceive(context: Context?, intent: Intent) {
                 Log.d(TAG, "Received intent")
 
-                if(intent.hasExtra("notifications")) {
-                    val newNotificationBits = intent.getByteExtra("notifications", 0x00)
+                if(intent.hasExtra(BuildConfig.APPLICATION_ID + ".NotificationBits")) {
+                    val newNotificationBits = intent.getByteExtra(BuildConfig.APPLICATION_ID + ".NotificationBits", 127)
                     notificationsChanged = newNotificationBits != notificationBits
                     notificationBits = newNotificationBits
-                    Log.d(TAG, "Notifications: ${gattCallback.notificationBits}")
+                    Log.d(TAG, "Notifications: $notificationBits")
                 }
             }
         }
@@ -152,6 +155,8 @@ class WatchyConnectionService : Service() {
                     getString(R.string.conn_not_title),
                     NotificationManager.IMPORTANCE_LOW
             )
+            serviceChannel.enableLights(false)
+            serviceChannel.enableVibration(false)
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(serviceChannel)
         }

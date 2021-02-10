@@ -20,7 +20,7 @@ class NotificationListener : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         bound = true
-        Log.d(TAG, "Listener connected - abc")
+        Log.d(TAG, "Listener connected")
 
         val listenerService = this
 
@@ -48,6 +48,7 @@ class NotificationListener : NotificationListenerService() {
         if(!bound) {
             return
         }
+
         Log.d(TAG, "Notification posted: ${sbn.packageName}")
 
         sendNotificationUpdate()
@@ -55,7 +56,11 @@ class NotificationListener : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         super.onNotificationRemoved(sbn)
-        Log.d(TAG, "Notification removed")
+        if(!bound) {
+            return
+        }
+
+        Log.d(TAG, "Notification removed: ${sbn.packageName}")
 
         sendNotificationUpdate()
     }
@@ -63,9 +68,15 @@ class NotificationListener : NotificationListenerService() {
     private fun sendNotificationUpdate() {
         val anyWhatsapp = activeNotifications.any { notification: StatusBarNotification -> notification.packageName == WHATSAPP_PACKAGE_NAME }
 
-        val intent = Intent("com.example.watchyoscompanionapp.WATCHY_GATT_CALLBACK")
-        val notificationBits : Byte = if (anyWhatsapp)  0x01 else 0x00
-        intent.putExtra("notifications", notificationBits)
+        val intent = Intent(BuildConfig.APPLICATION_ID + ".WATCHY_GATT_CALLBACK")
+        val notificationBits : Byte = if (anyWhatsapp)  {
+            0x01
+        } else {
+            0x00
+        }
+        intent.putExtra(BuildConfig.APPLICATION_ID+ ".NotificationBits", notificationBits)
         sendBroadcast(intent)
+
+        Log.d(TAG, "anyWhatsapp: $anyWhatsapp, notificationBits: $notificationBits")
     }
 }

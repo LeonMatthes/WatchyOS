@@ -16,9 +16,6 @@ class WatchyGattCallback(private val connectionService: WatchyConnectionService)
 
     var gatt: BluetoothGatt? = null
 
-    var notificationBits : Byte = 0x00
-    var notificationsChanged = false
-
     // warning! These queues will be reset on connect
     private val writeQueue : Queue<BluetoothGattCharacteristic> = LinkedList<BluetoothGattCharacteristic>()
     private val readQueue: Queue<BluetoothGattCharacteristic> = LinkedList<BluetoothGattCharacteristic>()
@@ -68,6 +65,7 @@ class WatchyGattCallback(private val connectionService: WatchyConnectionService)
         }
         else {
             Log.w(TAG, "wrote non-queued characteristic: ${characteristic.uuid}")
+            dispatch()
         }
     }
 
@@ -86,12 +84,17 @@ class WatchyGattCallback(private val connectionService: WatchyConnectionService)
                 BluetoothGatt.GATT_READ_NOT_PERMITTED -> {
                     Log.w(TAG, "Read of non-readable characteristic: ${characteristic.uuid}")
                     readQueue.remove()
+                    dispatch()
                 }
                 else -> {
                     Log.w(TAG, "Read of ${characteristic.uuid} returned with status: $status, retrying one more time...")
                     gatt.readCharacteristic(readQueue.remove())
                 }
             }
+        }
+        else {
+            Log.w(TAG, "Read non-queued characteristic ${characteristic.uuid}")
+            dispatch()
         }
     }
 
@@ -151,7 +154,6 @@ class WatchyGattCallback(private val connectionService: WatchyConnectionService)
             Log.d(TAG, "Error: $status, $newState - Reconnecting")
             gatt.disconnect()
             gatt.connect()
-
         }
     }
 
