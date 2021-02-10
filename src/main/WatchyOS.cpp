@@ -52,13 +52,24 @@ void app_main(void)
 
   ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
 
+  esp_reset_reason_t resetReason = esp_reset_reason();
+  printf("Reset cause: %i\n", resetReason);
+  if(resetReason == ESP_RST_DEEPSLEEP && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
+    gpio_pad_select_gpio(VIB_MOTOR_GPIO);
+    gpio_set_direction(VIB_MOTOR_GPIO, GPIO_MODE_OUTPUT);
+
+    gpio_set_level(VIB_MOTOR_GPIO, 1);
+
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+
+    gpio_set_level(VIB_MOTOR_GPIO, 0);
+  }
+
   initArduino();
   Wire.begin(SDA_PIN, SCL_PIN);
   Wire.setClock(400'000);
   display.init(0, false);
 
-  esp_reset_reason_t resetReason = esp_reset_reason();
-  printf("Reset cause: %i\n", resetReason);
   switch (resetReason) {
     case ESP_RST_SW:
     case ESP_RST_POWERON:
@@ -66,22 +77,7 @@ void app_main(void)
       screens::dispatch(false);
       break;
     case ESP_RST_DEEPSLEEP:
-      {
-        esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
-
-        if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT1) {
-          gpio_pad_select_gpio(VIB_MOTOR_GPIO);
-          gpio_set_direction(VIB_MOTOR_GPIO, GPIO_MODE_OUTPUT);
-
-          gpio_set_level(VIB_MOTOR_GPIO, 1);
-
-          vTaskDelay(50 / portTICK_PERIOD_MS);
-
-          gpio_set_level(VIB_MOTOR_GPIO, 0);
-        }
-
-        screens::dispatch(true);
-      }
+      screens::dispatch(true);
       break;
     default:
       showResetCause(resetReason);

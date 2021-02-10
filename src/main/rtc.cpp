@@ -1,4 +1,8 @@
 #include "rtc.h"
+#include "i2c.h"
+
+#include <mutex>
+
 using namespace rtc;
 
 DS3232RTC rtc::RTC(false);
@@ -28,6 +32,8 @@ time_t compileTime()
 }
 
 void rtc::init() {
+  std::lock_guard<std::mutex> guard = std::lock_guard(i2c::mutex);
+
   RTC.squareWave(SQWAVE_NONE);
   RTC.set(compileTime());
   RTC.setAlarm(ALM2_EVERY_MINUTE, 0, 0, 0, 0);
@@ -38,15 +44,20 @@ void rtc::init() {
 }
 
 void rtc::setTime(tmElements_t newTime) {
+  std::lock_guard<std::mutex> guard = std::lock_guard(i2c::mutex);
+
   RTC.set(makeTime(newTime));
 }
 
 tmElements_t rtc::currentTime() {
+  std::lock_guard<std::mutex> guard = std::lock_guard(i2c::mutex);
+
   tmElements_t now{};
   RTC.read(now);
   return now;
 }
 
 void rtc::resetAlarm() {
+  std::lock_guard<std::mutex> guard = std::lock_guard(i2c::mutex);
   RTC.alarm(ALARM_2);
 }

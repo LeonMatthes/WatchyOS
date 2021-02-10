@@ -7,13 +7,18 @@
 #include "constants.h"
 
 #include <Wire.h>
+#include "i2c.h"
 
 #include <cmath>
+#include <functional>
+#include <mutex>
 
 #include <esp_log.h>
 static const char* TAG = "Accelerometer";
 
 int8_t accelerometer_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void* intf_ptr) {
+  std::lock_guard<std::mutex> guard = std::lock_guard(i2c::mutex);
+
   Wire.beginTransmission(BMA4_I2C_ADDR_PRIMARY);
   Wire.write(reg_addr);
   if (uint8_t result = Wire.endTransmission()) {
@@ -33,14 +38,16 @@ int8_t accelerometer_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t leng
 }
 
 int8_t accelerometer_i2c_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void* intf_ptr) {
+  std::lock_guard<std::mutex> guard = std::lock_guard(i2c::mutex);
+
   Wire.beginTransmission(BMA4_I2C_ADDR_PRIMARY);
   Wire.write(reg_addr);
   Wire.write(reg_data, length);
   return Wire.endTransmission();
 }
 
-void accelerometer_delay_us(uint32_t period, void* intf_ptr) {
-  vTaskDelay(std::ceil(static_cast<float>(period) / 1000 / portTICK_PERIOD_MS));
+void accelerometer_delay_us(uint32_t period_ns, void* intf_ptr) {
+  vTaskDelay(std::ceil(static_cast<float>(period_ns) / 1000 / portTICK_PERIOD_MS));
 }
 
 using namespace accelerometer;
