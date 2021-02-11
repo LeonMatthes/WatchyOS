@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Build
 import android.os.IBinder
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -27,14 +28,21 @@ class NotificationListener : NotificationListenerService() {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent) {
                 Log.d(TAG, "Received intent")
-                if(intent.getStringExtra("command").equals("clearall")) {
-                    listenerService.cancelAllNotifications()
+                when (intent.getStringExtra(BuildConfig.APPLICATION_ID + ".Command")) {
+                    "clearall" -> {
+                        cancelAllNotifications()
+                    }
+                    "sendUpdate" -> {
+                        sendNotificationUpdate()
+                    }
                 }
             }
         }
         val filter = IntentFilter()
-        filter.addAction("com.example.watchyoscompanionapp.NOTIFICATION_LISTENER_SERVICE_EXAMPLE")
+        filter.addAction("com.example.watchyoscompanionapp.WATCHY_NOTIFICATION_LISTENER")
         registerReceiver(receiver, filter)
+
+        sendNotificationUpdate()
     }
 
     override fun onListenerDisconnected() {
@@ -51,7 +59,9 @@ class NotificationListener : NotificationListenerService() {
 
         Log.d(TAG, "Notification posted: ${sbn.packageName}")
 
-        sendNotificationUpdate()
+        if(sbn.packageName == WHATSAPP_PACKAGE_NAME) {
+            sendNotificationUpdate()
+        }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
@@ -62,7 +72,9 @@ class NotificationListener : NotificationListenerService() {
 
         Log.d(TAG, "Notification removed: ${sbn.packageName}")
 
-        sendNotificationUpdate()
+        if(sbn.packageName == WHATSAPP_PACKAGE_NAME) {
+            sendNotificationUpdate()
+        }
     }
 
     private fun sendNotificationUpdate() {

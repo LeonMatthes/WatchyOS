@@ -17,11 +17,11 @@ class WatchyGattCallback(private val connectionService: WatchyConnectionService)
     var gatt: BluetoothGatt? = null
 
     // warning! These queues will be reset on connect
-    private val writeQueue : Queue<BluetoothGattCharacteristic> = LinkedList<BluetoothGattCharacteristic>()
+    private val writeQueue : Queue<Pair<BluetoothGattCharacteristic, (Boolean) -> Unit>> = LinkedList<Pair<BluetoothGattCharacteristic, (Boolean) -> Unit>>()
     private val readQueue: Queue<BluetoothGattCharacteristic> = LinkedList<BluetoothGattCharacteristic>()
 
-    fun pushWrite(characteristic: BluetoothGattCharacteristic) {
-        writeQueue.add(characteristic)
+    fun pushWrite(characteristic: BluetoothGattCharacteristic, successCallback: (Boolean) -> Unit = {}) {
+        writeQueue.add(Pair(characteristic, successCallback))
     }
 
     fun pushRead(characteristic: BluetoothGattCharacteristic) {
@@ -33,7 +33,7 @@ class WatchyGattCallback(private val connectionService: WatchyConnectionService)
 
         when {
             !readQueue.isEmpty() -> gatt.readCharacteristic(readQueue.peek())
-            !writeQueue.isEmpty() -> gatt.writeCharacteristic(writeQueue.peek())
+            !writeQueue.isEmpty() -> gatt.writeCharacteristic(writeQueue.peek()?.first)
             else -> gatt.disconnect()
         }
     }
@@ -51,22 +51,27 @@ class WatchyGattCallback(private val connectionService: WatchyConnectionService)
     override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
         super.onCharacteristicWrite(gatt, characteristic, status)
 
-        if(writeQueue.peek()?.uuid == characteristic.uuid) {
-            if(status == BluetoothGatt.GATT_SUCCESS) {
-                Log.d(TAG, "Successfully wrote characteristic: ${characteristic.uuid}")
+        if(writeQueue.peek()?.first?.uuid == characteristic.uuid) {
+            when (status) {
+                BluetoothGatt.GATT_SUCCESS -> {
+                    Log.d(TAG, "Successfully wrote characteristic: ${characteristic.uuid}")
 
-                writeQueue.remove()
-                dispatch()
-            }
-            else {
-                Log.w(TAG, "Characteristic write failed with status: $status! Retrying once...")
-                gatt.writeCharacteristic(writeQueue.remove())
+                    writeQueue.remove().second(true)
+                }
+                BluetoothGatt.GATT_WRITE_NOT_PERMITTED -> {
+                    Log.w(TAG, "Write to characteristic: ${characteristic.uuid} not permitted")
+                    writeQueue.remove().second(false)
+                }
+                else -> {
+                    Log.w(TAG, "Characteristic write failed with status: $status!")
+                    writeQueue.remove().second(false)
+                }
             }
         }
         else {
             Log.w(TAG, "wrote non-queued characteristic: ${characteristic.uuid}")
-            dispatch()
         }
+        dispatch()
     }
 
     override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
@@ -79,23 +84,22 @@ class WatchyGattCallback(private val connectionService: WatchyConnectionService)
 
                     connectionService.onCharacteristicRead(characteristic)
                     readQueue.remove()
-                    dispatch()
                 }
                 BluetoothGatt.GATT_READ_NOT_PERMITTED -> {
                     Log.w(TAG, "Read of non-readable characteristic: ${characteristic.uuid}")
                     readQueue.remove()
-                    dispatch()
                 }
                 else -> {
                     Log.w(TAG, "Read of ${characteristic.uuid} returned with status: $status, retrying one more time...")
                     gatt.readCharacteristic(readQueue.remove())
+                    return
                 }
             }
         }
         else {
             Log.w(TAG, "Read non-queued characteristic ${characteristic.uuid}")
-            dispatch()
         }
+        dispatch()
     }
 
     private fun BluetoothGatt.printGattTable() {

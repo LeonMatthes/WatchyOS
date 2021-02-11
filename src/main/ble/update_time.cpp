@@ -19,6 +19,7 @@
 const char* TAG = "BLE";
 
 RTC_DATA_ATTR uint8_t ble::notifications = 0;
+static RTC_DATA_ATTR uint8_t stateID = 0; // used to make sure Watchy & Phone don't get desynchronized
 
 class TimeCharacteristicCallbacks : public BLECharacteristicCallbacks {
   public:
@@ -63,21 +64,37 @@ class NotificationCharacteristicCallbacks : public BLECharacteristicCallbacks {
     }
 };
 
+class StateCharacteristicCallbaks : public BLECharacteristicCallbacks {
+  public:
+    virtual ~StateCharacteristicCallbaks() {}
+
+    virtual void onWrite(BLECharacteristic* characteristic) override {
+      std::string value = characteristic->getValue();
+      if(2 == value.size()){
+        stateID = value[1];
+        ESP_LOGI(TAG, "Successfully updated state id from Phone");
+      }
+      else {
+        ESP_LOGW(TAG, "Received invalid new state of %i bytes", value.size());
+      }
+    }
+};
+
 class ServerCallbacks : public BLEServerCallbacks {
   public:
     bool connected = false;
 
     virtual ~ServerCallbacks() {}
     virtual void onConnect(BLEServer* server) override {
-      ESP_LOGD(TAG, "Client connected");
+      ESP_LOGI(TAG, "Client connected");
       connected = true;
     }
     virtual void onConnect(BLEServer* server, esp_ble_gatts_cb_param_t *param) override {
-      ESP_LOGD(TAG, "Client connected 2");
+      ESP_LOGI(TAG, "Client connected 2");
     }
 
     virtual void onDisconnect(BLEServer* server) override {
-      ESP_LOGD(TAG, "Client disconnected");
+      ESP_LOGI(TAG, "Client disconnected");
       connected = false;
     }
 };
@@ -86,6 +103,7 @@ bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* 
   ServerCallbacks callbacks;
   TimeCharacteristicCallbacks timeCB;
   NotificationCharacteristicCallbacks notificationCB;
+  StateCharacteristicCallbaks stateCallback;
 
   BLEDevice::init("WatchyOS");
   BLEServer *pServer = BLEDevice::createServer();
@@ -107,12 +125,13 @@ bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* 
   notificationChar->setWriteProperty(true);
   notificationChar->setCallbacks(&notificationCB);
 
-  uint8_t state = connectionState;
+  uint8_t state[] = { connectionState, stateID };
   BLECharacteristic *stateCharacteristic = pService->createCharacteristic(
                                           STATE_CHARACTERISTIC_UUID,
-                                          BLECharacteristic::PROPERTY_READ
+                                          BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE
                                           );
-  stateCharacteristic->setValue(&state, 1);
+  stateCharacteristic->setValue(state, 2);
+  stateCharacteristic->setCallbacks(&stateCallback);
 
   pService->start();
   // BLEAdvertising *pAdvertising = pServer->getAdvertising();  // this still is working for backward compatibility
@@ -121,6 +140,7 @@ bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* 
   pAdvertising->setScanResponse(true);
   pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
   pAdvertising->setMinPreferred(0x12);
+  pAdvertising->setMaxPreferred(0x24);
   pAdvertising->setMinInterval(0x20);
   pAdvertising->setMaxInterval(0x40);
 
@@ -128,7 +148,7 @@ bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* 
   BLEDevice::startAdvertising();
   auto begin_time = esp_timer_get_time();
 
-  ESP_LOGD(TAG, "Started advertising");
+  ESP_LOGI(TAG, "Started advertising");
 
   // delay until disconnected or 10 secs elapse
   while(!callbacks.connected && esp_timer_get_time() - begin_time < timeout) {
