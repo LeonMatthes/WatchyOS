@@ -65,7 +65,10 @@ class NotificationCharacteristicCallbacks : public BLECharacteristicCallbacks {
 };
 
 class StateCharacteristicCallbaks : public BLECharacteristicCallbacks {
+  BLEServer* m_server;
   public:
+    StateCharacteristicCallbaks(BLEServer* server) : m_server{server} {}
+
     virtual ~StateCharacteristicCallbaks() {}
 
     virtual void onWrite(BLECharacteristic* characteristic) override {
@@ -73,10 +76,20 @@ class StateCharacteristicCallbaks : public BLECharacteristicCallbacks {
       if(2 == value.size()){
         stateID = value[1];
         ESP_LOGI(TAG, "Successfully updated state id from Phone");
+        // indicates disconnection attempt by the phone
+        // it is much faster for everyone involved if Watchy initiates the disconnect,
+        // instead of the Android phone!
+        if(value[0] == ble::DISCONNECT) {
+          m_server->disconnect(m_server->getConnId());
+        }
       }
       else {
         ESP_LOGW(TAG, "Received invalid new state of %i bytes", value.size());
       }
+    }
+
+    virtual void onRead(BLECharacteristic* characteristic) override {
+      ESP_LOGI(TAG, "Reading state characteristic");
     }
 };
 
@@ -103,7 +116,6 @@ bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* 
   ServerCallbacks callbacks;
   TimeCharacteristicCallbacks timeCB;
   NotificationCharacteristicCallbacks notificationCB;
-  StateCharacteristicCallbaks stateCallback;
 
   BLEDevice::init("WatchyOS");
   BLEServer *pServer = BLEDevice::createServer();
@@ -125,6 +137,7 @@ bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* 
   notificationChar->setWriteProperty(true);
   notificationChar->setCallbacks(&notificationCB);
 
+  StateCharacteristicCallbaks stateCallback(pServer);
   uint8_t state[] = { connectionState, stateID };
   BLECharacteristic *stateCharacteristic = pService->createCharacteristic(
                                           STATE_CHARACTERISTIC_UUID,
@@ -139,10 +152,10 @@ bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* 
   pAdvertising->addServiceUUID(WATCHYOS_SERVICE_UUID);
   pAdvertising->setScanResponse(true);
   pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
-  pAdvertising->setMinPreferred(0x12);
+  // pAdvertising->setMinPreferred(0x12);
   pAdvertising->setMaxPreferred(0x24);
-  pAdvertising->setMinInterval(0x20);
-  pAdvertising->setMaxInterval(0x40);
+  pAdvertising->setMinInterval(0x20 /* equivalent to 20ms*/);
+  pAdvertising->setMaxInterval(0x20);
 
 
   BLEDevice::startAdvertising();
@@ -160,6 +173,7 @@ bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* 
     return false;
   }
 
+  BLEDevice::stopAdvertising();
   while(callbacks.connected) {
     vTaskDelay(1);
   }

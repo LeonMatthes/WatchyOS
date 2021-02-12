@@ -9,8 +9,9 @@ namespace ble {
 
   enum State {
     REBOOT = 1, // should update time and notifications
-    FAST_UPDATE = 2, // 
+    FAST_UPDATE = 2,
     CONNECTION = 3,
+    DISCONNECT = 0xFF // only ever sent by the Phone to disconnect
   };
 
   extern uint8_t notifications;

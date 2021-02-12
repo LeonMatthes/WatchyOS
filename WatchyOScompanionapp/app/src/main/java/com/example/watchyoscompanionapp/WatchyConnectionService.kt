@@ -15,7 +15,6 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationCompat.PRIORITY_LOW
-import androidx.core.app.NotificationCompat.PRIORITY_MIN
 import java.util.*
 
 private val CHANNEL_ID = "ForegroundServiceChannel"
@@ -136,10 +135,10 @@ class WatchyConnectionService : Service() {
         gattCallback.pushWrite(characteristic) {watchyStateID = stateID}
     }
 
-    private fun fullSync(state: Byte = WatchyBLEState.REBOOT.state) {
+    private fun fullSync(state: Byte = WatchyBLEState.REBOOT.value) {
         writeNotificationCharacteristic()
         writeTimeCharacteristic()
-        writeWatchyState(state, phoneStateID)
+        writeWatchyState(WatchyBLEState.DISCONNECT.value, phoneStateID)
     }
 
     private fun stateRead(characteristic: BluetoothGattCharacteristic) {
@@ -151,10 +150,10 @@ class WatchyConnectionService : Service() {
         val state = value[0]
         val stateID = value[1]
         when(state) {
-            WatchyBLEState.REBOOT.state -> {
+            WatchyBLEState.REBOOT.value -> {
                 fullSync()
             }
-            WatchyBLEState.FAST_UPDATE.state -> {
+            WatchyBLEState.FAST_UPDATE.value -> {
                 if(stateID != watchyStateID) {
                     // Watchy has a different state then it should have
                     Log.w(TAG, "Watchy state $stateID is not the expected $watchyStateID")
@@ -162,8 +161,9 @@ class WatchyConnectionService : Service() {
                 }
                 else if(watchyStateID != phoneStateID) {
                     writeNotificationCharacteristic()
-                    writeWatchyState(state, phoneStateID)
                 }
+                // this will cause Watchy to initiate a disconnect, which is much faster then Android disconnecting
+                writeWatchyState(WatchyBLEState.DISCONNECT.value, phoneStateID)
             }
             else -> {
                 Log.w(TAG, "WatchyOS State characteristic has unsupported value: ${value.first()}")
