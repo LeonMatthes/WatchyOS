@@ -8,7 +8,6 @@ namespace event_queue {
     BACK_BUTTON,
     UP_BUTTON,
     DOWN_BUTTON,
-    BLE_UPDATE
   };
 
   extern FreeRTOSQueue<Event> queue;
