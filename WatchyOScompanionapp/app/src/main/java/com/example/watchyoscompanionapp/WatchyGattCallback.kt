@@ -150,7 +150,8 @@ class WatchyGattCallback(private val connectionService: WatchyConnectionService)
                     successfullyConnected()
                 }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                SystemClock.sleep(10000)
+                // Without the delay, after a disconnect we will reconnect immediately, without Watchy ever disconnecting
+                SystemClock.sleep(1500)
                 Log.d(TAG, "Disconnected - Trying to reconnect")
                 gatt.connect()
             }
