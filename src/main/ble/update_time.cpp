@@ -1,8 +1,8 @@
 #include "update_time.h"
 
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEServer.h>
+#include <NimBLEDevice.h>
+#include <NimBLEUtils.h>
+#include <NimBLEServer.h>
 #include <TimeLib.h>
 
 #include <cstring>
@@ -21,11 +21,11 @@ const char* TAG = "BLE";
 RTC_DATA_ATTR uint8_t ble::notifications = 0;
 static RTC_DATA_ATTR uint8_t stateID = 0; // used to make sure Watchy & Phone don't get desynchronized
 
-class TimeCharacteristicCallbacks : public BLECharacteristicCallbacks {
+class TimeCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
   public:
     virtual ~TimeCharacteristicCallbacks() {}
 
-    virtual void onWrite(BLECharacteristic* characteristic) override {
+    virtual void onWrite(NimBLECharacteristic* characteristic) override {
       std::string value = characteristic->getValue();
       if(7 == value.size()){
         tmElements_t newTime {
@@ -48,11 +48,11 @@ class TimeCharacteristicCallbacks : public BLECharacteristicCallbacks {
     }
 };
 
-class NotificationCharacteristicCallbacks : public BLECharacteristicCallbacks {
+class NotificationCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
   public:
     virtual ~NotificationCharacteristicCallbacks() {}
 
-    virtual void onWrite(BLECharacteristic* characteristic) override {
+    virtual void onWrite(NimBLECharacteristic* characteristic) override {
       std::string value = characteristic->getValue();
       if(1 == value.size()){
         ble::notifications = static_cast<uint8_t>(value[0]);
@@ -64,14 +64,14 @@ class NotificationCharacteristicCallbacks : public BLECharacteristicCallbacks {
     }
 };
 
-class StateCharacteristicCallbaks : public BLECharacteristicCallbacks {
+class StateCharacteristicCallbaks : public NimBLECharacteristicCallbacks {
   BLEServer* m_server;
   public:
     StateCharacteristicCallbaks(BLEServer* server) : m_server{server} {}
 
     virtual ~StateCharacteristicCallbaks() {}
 
-    virtual void onWrite(BLECharacteristic* characteristic) override {
+    virtual void onWrite(NimBLECharacteristic* characteristic, ble_gap_conn_desc* desc) override {
       std::string value = characteristic->getValue();
       if(2 == value.size()){
         stateID = value[1];
@@ -80,7 +80,7 @@ class StateCharacteristicCallbaks : public BLECharacteristicCallbacks {
         // it is much faster for everyone involved if Watchy initiates the disconnect,
         // instead of the Android phone!
         if(value[0] == ble::DISCONNECT) {
-          m_server->disconnect(m_server->getConnId());
+          m_server->disconnect(desc->conn_handle);
         }
       }
       else {
@@ -88,25 +88,25 @@ class StateCharacteristicCallbaks : public BLECharacteristicCallbacks {
       }
     }
 
-    virtual void onRead(BLECharacteristic* characteristic) override {
+    virtual void onRead(NimBLECharacteristic* characteristic) override {
       ESP_LOGI(TAG, "Reading state characteristic");
     }
 };
 
-class ServerCallbacks : public BLEServerCallbacks {
+class ServerCallbacks : public NimBLEServerCallbacks {
   public:
     bool connected = false;
 
     virtual ~ServerCallbacks() {}
-    virtual void onConnect(BLEServer* server) override {
+    virtual void onConnect(NimBLEServer* server) override {
       ESP_LOGI(TAG, "Client connected");
       connected = true;
     }
-    virtual void onConnect(BLEServer* server, esp_ble_gatts_cb_param_t *param) override {
+    virtual void onConnect(NimBLEServer* server, ble_gap_conn_desc *desc) override {
       ESP_LOGI(TAG, "Client connected 2");
     }
 
-    virtual void onDisconnect(BLEServer* server) override {
+    virtual void onDisconnect(NimBLEServer* server) override {
       ESP_LOGI(TAG, "Client disconnected");
       connected = false;
     }
@@ -117,38 +117,35 @@ bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* 
   TimeCharacteristicCallbacks timeCB;
   NotificationCharacteristicCallbacks notificationCB;
 
-  BLEDevice::init("WatchyOS");
-  BLEServer *pServer = BLEDevice::createServer();
+  NimBLEDevice::init("WatchyOS");
+  NimBLEServer *pServer = BLEDevice::createServer();
+  pServer->advertiseOnDisconnect(false);
   pServer->setCallbacks(&callbacks);
-  BLEService *pService = pServer->createService(WATCHYOS_SERVICE_UUID);
-  BLECharacteristic *pCharacteristic = pService->createCharacteristic(
+  NimBLEService *pService = pServer->createService(WATCHYOS_SERVICE_UUID);
+  NimBLECharacteristic *pCharacteristic = pService->createCharacteristic(
                                          TIME_CHARACTERISTIC_UUID,
-                                         BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR
+                                         NIMBLE_PROPERTY::WRITE
                                        );
-  pCharacteristic->setWriteNoResponseProperty(true);
-  pCharacteristic->setWriteProperty(true);
   pCharacteristic->setCallbacks(&timeCB);
 
-  BLECharacteristic *notificationChar = pService->createCharacteristic(
+  NimBLECharacteristic *notificationChar = pService->createCharacteristic(
                                          NOTIFICATIONS_CHARACTERISTIC_UUID,
-                                         BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR
+                                         NIMBLE_PROPERTY::WRITE
                                        );
-  notificationChar->setWriteNoResponseProperty(true);
-  notificationChar->setWriteProperty(true);
   notificationChar->setCallbacks(&notificationCB);
 
   StateCharacteristicCallbaks stateCallback(pServer);
   uint8_t state[] = { connectionState, stateID };
-  BLECharacteristic *stateCharacteristic = pService->createCharacteristic(
+  NimBLECharacteristic *stateCharacteristic = pService->createCharacteristic(
                                           STATE_CHARACTERISTIC_UUID,
-                                          BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE
+                                          NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::READ
                                           );
   stateCharacteristic->setValue(state, 2);
   stateCharacteristic->setCallbacks(&stateCallback);
 
   pService->start();
   // BLEAdvertising *pAdvertising = pServer->getAdvertising();  // this still is working for backward compatibility
-  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  NimBLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(WATCHYOS_SERVICE_UUID);
   pAdvertising->setScanResponse(true);
   pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
@@ -158,7 +155,7 @@ bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* 
   pAdvertising->setMaxInterval(0x20);
 
 
-  BLEDevice::startAdvertising();
+  NimBLEDevice::startAdvertising();
   auto begin_time = esp_timer_get_time();
 
   ESP_LOGI(TAG, "Started advertising");
@@ -173,15 +170,15 @@ bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* 
     return false;
   }
 
-  BLEDevice::stopAdvertising();
+  NimBLEDevice::stopAdvertising();
   while(callbacks.connected) {
     vTaskDelay(1);
   }
 
   ESP_LOGI(TAG, "BLE operation took %llims", (esp_timer_get_time() - begin_time) / 1'000);
 
-  BLEDevice::stopAdvertising();
-  BLEDevice::deinit();
+  NimBLEDevice::stopAdvertising();
+  NimBLEDevice::deinit();
 
   return true;
 }

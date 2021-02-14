@@ -4,3 +4,6 @@
 [submodule "src/components/BMA423-Sensor-API/git"]
 	path = src/components/BMA423-Sensor-API/git
 	url = https://github.com/BoschSensortec/BMA423-Sensor-API.git
+[submodule "src/components/esp-nimble-cpp"]
+	path = src/components/esp-nimble-cpp
+	url = https://github.com/h2zero/esp-nimble-cpp.git
