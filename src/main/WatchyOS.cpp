@@ -3,6 +3,7 @@
 #include "esp_sleep.h"
 #include "esp_pm.h"
 #include "esp_system.h"
+#include "esp_log.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -16,6 +17,9 @@
 #include "constants.h"
 #include "accelerometer.h"
 #include "rtc.h"
+#include "event_queue.h"
+#include "vibration_motor.h"
+#include "input.h"
 
 
 #include "e_ink.h"
@@ -52,23 +56,19 @@ void app_main(void)
 
   ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
 
+  vibration_motor::startTask().detach();
   esp_reset_reason_t resetReason = esp_reset_reason();
-  printf("Reset cause: %i\n", resetReason);
   if(resetReason == ESP_RST_DEEPSLEEP && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
-    gpio_pad_select_gpio(VIB_MOTOR_GPIO);
-    gpio_set_direction(VIB_MOTOR_GPIO, GPIO_MODE_OUTPUT);
-
-    gpio_set_level(VIB_MOTOR_GPIO, 1);
-
-    vTaskDelay(50 / portTICK_PERIOD_MS);
-
-    gpio_set_level(VIB_MOTOR_GPIO, 0);
+    // buzz to acknowledge input
+    vibration_motor::buzz(50);
   }
+  printf("Reset cause: %i\n", resetReason);
 
   initArduino();
   Wire.begin(SDA_PIN, SCL_PIN);
   Wire.setClock(400'000);
   display.init(0, false);
+  input::startTask().detach();
 
   switch (resetReason) {
     case ESP_RST_SW:
@@ -77,6 +77,7 @@ void app_main(void)
       screens::dispatch(false);
       break;
     case ESP_RST_DEEPSLEEP:
+      event_queue::pushWakeupCause();
       screens::dispatch(true);
       break;
     default:
@@ -89,6 +90,7 @@ void app_main(void)
   fflush(stdout);
   esp_sleep_enable_ext0_wakeup(RTC_PIN, 0); //enable deep sleep wake on RTC interrupt
   esp_sleep_enable_ext1_wakeup(BTN_PIN_MASK, ESP_EXT1_WAKEUP_ANY_HIGH); //enable deep sleep wake on button press
+  ESP_LOGI("WatchyOS", "Entering Deep Sleep");
   esp_deep_sleep_start();
 }
 

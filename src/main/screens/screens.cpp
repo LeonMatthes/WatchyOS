@@ -44,9 +44,12 @@ using namespace e_ink;
 
 #include <rtc.h>
 #include <accelerometer.h>
+#include <event_queue.h>
 
 Screen takeNap(bool wake_from_sleep = false) {
   if(wake_from_sleep) {
+    // pop the event that woke us from the queue
+    event_queue::queue.receive();
     return WATCHFACE;
   }
 

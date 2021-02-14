@@ -7,6 +7,7 @@ using namespace screens;
 #include <cstdint>
 
 #include "constants.h"
+#include <event_queue.h>
 #include "res/fonts/Inconsolata_Bold10pt7b.h"
 #include "e_ink.h"
 using namespace e_ink;
@@ -31,6 +32,8 @@ const std::array<MenuEntry, 3> entries = {{
   }
 }};
 
+#include <vibration_motor.h>
+
 screens::Screen screensMenu(bool wakeFromSleep) {
   int selectedIndex = 0;
   const int margin = 2;
@@ -38,38 +41,6 @@ screens::Screen screensMenu(bool wakeFromSleep) {
   // only partial refresh when waking up again
   bool initial = true;
   while(true) {
-
-    if(!initial) {
-
-      uint64_t btn_presses = esp_sleep_get_ext1_wakeup_status();
-
-      if(btn_presses) {
-        gpio_set_level(VIB_MOTOR_GPIO, 1);
-        vTaskDelay(50 / portTICK_PERIOD_MS);
-        gpio_set_level(VIB_MOTOR_GPIO, 0);
-      }
-
-      if(btn_presses & MENU_BTN_MASK) {
-        return entries[selectedIndex].screen;
-      }
-
-      if(btn_presses & BACK_BTN_MASK) {
-        return WATCHFACE;
-      }
-
-      if(btn_presses & DOWN_BTN_MASK) {
-        selectedIndex++;
-        selectedIndex %= entries.size();
-      }
-
-      if(btn_presses & UP_BTN_MASK) {
-        selectedIndex--;
-        while (selectedIndex < 0) {
-          selectedIndex += entries.size();
-        }
-      }
-    }
-
     display.fillScreen(BG_COLOR);
 
     int16_t headerHeight = screens::drawHeader();
@@ -93,9 +64,33 @@ screens::Screen screensMenu(bool wakeFromSleep) {
     display.hibernate();
     initial = false;
 
-    rtc::resetAlarm();
-    esp_sleep_enable_ext0_wakeup(RTC_PIN, 0);
-    esp_sleep_enable_ext1_wakeup(BTN_PIN_MASK, ESP_EXT1_WAKEUP_ANY_HIGH);
-    esp_light_sleep_start();
+    // wait for a button event to occur
+    bool btn_pressed = false;
+    do {
+      auto event = event_queue::queue.receive(portMAX_DELAY);
+      if(event) {
+        switch (*event) {
+          case event_queue::Event::MENU_BUTTON: 
+            return entries[selectedIndex].screen;
+          case event_queue::Event::BACK_BUTTON:
+            return WATCHFACE;
+          case event_queue::Event::DOWN_BUTTON:
+            selectedIndex++;
+            selectedIndex %= entries.size();
+            btn_pressed = true;
+            break;
+          case event_queue::Event::UP_BUTTON:
+            selectedIndex--;
+            while(selectedIndex < 0) {
+              selectedIndex += entries.size();
+            }
+            btn_pressed = true;
+            break;
+          default:
+            break;
+        }
+      }
+    }
+    while(!btn_pressed);
   }
 }

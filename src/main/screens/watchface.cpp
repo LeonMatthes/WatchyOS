@@ -1,4 +1,5 @@
 #include "watchface.h"
+#include <thread>
 using namespace watchface;
 
 #include "e_ink.h"
@@ -63,9 +64,9 @@ void drawStepCount() {
   }
 }
 
-void drawNotifications() {
-  using namespace ble;
-  if(notifications & Notifications::WHATSAPP) {
+void drawNotifications(uint8_t notifications) {
+  display.fillRect(0, 155, 200, 20, BG_COLOR);
+  if(notifications & ble::Notifications::WHATSAPP) {
     display.drawBitmap(90, 155, icon_whatsapp, 20, 20, FG_COLOR);
   }
 }
@@ -73,15 +74,22 @@ void drawNotifications() {
 using namespace screens;
 
 #include "constants.h"
+#include "event_queue.h"
 
 Screen watchface::update(bool wakeFromSleep /*= true*/) {
-  if(wakeFromSleep && (esp_sleep_get_ext1_wakeup_status() & MENU_BTN_MASK)) {
-    return MENU;
+  while(auto event = event_queue::queue.receive()) {
+    if(*event == event_queue::Event::MENU_BUTTON) {
+      return MENU;
+    }
   }
 
+  std::optional<std::thread> bleThread;
+  uint8_t notifications = ble::notifications;
   if(wakeFromSleep) {
     // REBOOT will also update time, not just notifications
-    ble::updateTime(rtc::initialized ? ble::FAST_UPDATE : ble::REBOOT);
+    bleThread = std::thread([](){
+        ble::updateTime(rtc::initialized ? ble::FAST_UPDATE : ble::REBOOT);
+        });
   }
 
   tmElements_t now = rtc::currentTime();
@@ -99,10 +107,22 @@ Screen watchface::update(bool wakeFromSleep /*= true*/) {
   drawDate(now);
   drawTime(now);
   drawStepCount();
-  drawNotifications();
+  drawNotifications(notifications);
 
   display.display(wakeFromSleep);
   display.hibernate();
+
+  if(bleThread) {
+    bleThread->join();
+    bleThread = {};
+    if(notifications != ble::notifications) {
+      // notifications changed, redraw
+      drawNotifications(ble::notifications);
+      display.display(true);
+      display.hibernate();
+    }
+  }
+
   return WATCHFACE;
 }
 
