@@ -42,6 +42,7 @@ screens::Screen screensMenu(bool wakeFromSleep) {
   int selectedIndex = 0;
   const int margin = 2;
 
+  bool initial = true;
   while(true) {
     display.fillScreen(BG_COLOR);
 
@@ -62,8 +63,7 @@ screens::Screen screensMenu(bool wakeFromSleep) {
       display.setTextColor(i == selectedIndex ? BG_COLOR : FG_COLOR);
       display.println(entries[i].name);
     }
-    // partial refresh for responsiveness
-    display.display(true);
+    display.display(!initial);
     display.hibernate();
 
     // wait for a button event to occur
@@ -94,5 +94,7 @@ screens::Screen screensMenu(bool wakeFromSleep) {
       }
     }
     while(!btn_pressed);
+
+    initial = false;
   }
 }
