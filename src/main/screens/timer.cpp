@@ -25,12 +25,11 @@ int drawTime(int minutes, int seconds) {
     return y;
 }
 
-std::optional<int64_t> selectTime() {
+std::optional<int64_t> selectTime(bool initial) {
   auto minutes = 5;
   auto seconds = 0;
   bool selectMinutes = true;
 
-  bool initial = true;
   do {
     auto y = drawTime(minutes, seconds);
 
@@ -117,9 +116,8 @@ bool pauseTimer(uint64_t remainingTime) {
   }
 }
 
-screens::Screen timerScreen(bool wakeFromSleep) {
-
-  auto selected = selectTime();
+screens::Screen runTimer(bool initial) {
+  auto selected = selectTime(initial);
   if(!selected) {
     return screens::MENU;
   }
@@ -192,8 +190,7 @@ screens::Screen timerScreen(bool wakeFromSleep) {
       }
     }
     drawTime(remainingSeconds / 60, remainingSeconds % 60);
-    // use full refresh for effect when time is up
-    display.display(remainingSeconds > 0);
+    display.display(true);
   }
   while(remainingSeconds > 0);
 
@@ -204,7 +201,7 @@ screens::Screen timerScreen(bool wakeFromSleep) {
         case Event::BACK_BUTTON:
           return screens::MENU;
         case Event::MENU_BUTTON:
-          return timerScreen(false);
+          return runTimer(false);
         default:
           break;
       }
@@ -212,4 +209,8 @@ screens::Screen timerScreen(bool wakeFromSleep) {
     }
   }
   while(true);
+}
+
+screens::Screen timerScreen(bool wakeFromSleep) {
+  return runTimer(true);
 }
