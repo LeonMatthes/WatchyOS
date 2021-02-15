@@ -171,13 +171,13 @@ bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* 
   }
 
   NimBLEDevice::stopAdvertising();
-  while(callbacks.connected) {
+  // Add a second timeout, to make sure we eventually disconnect
+  while(callbacks.connected && esp_timer_get_time() - begin_time < timeout * 10) {
     vTaskDelay(1);
   }
 
   ESP_LOGI(TAG, "BLE operation took %llims", (esp_timer_get_time() - begin_time) / 1'000);
 
-  NimBLEDevice::stopAdvertising();
   NimBLEDevice::deinit();
 
   return true;

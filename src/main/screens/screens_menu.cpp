@@ -17,7 +17,11 @@ struct MenuEntry {
   const char* name;
 };
 
-const std::array<MenuEntry, 3> entries = {{
+const std::array<MenuEntry, 4> entries = {{
+  {
+    .screen = TIMER,
+    .name = "Timer"
+  },
   {
     .screen = NAP,
     .name = "Go to sleep"
@@ -38,8 +42,6 @@ screens::Screen screensMenu(bool wakeFromSleep) {
   int selectedIndex = 0;
   const int margin = 2;
 
-  // only partial refresh when waking up again
-  bool initial = true;
   while(true) {
     display.fillScreen(BG_COLOR);
 
@@ -60,9 +62,9 @@ screens::Screen screensMenu(bool wakeFromSleep) {
       display.setTextColor(i == selectedIndex ? BG_COLOR : FG_COLOR);
       display.println(entries[i].name);
     }
-    display.display(!initial);
+    // partial refresh for responsiveness
+    display.display(true);
     display.hibernate();
-    initial = false;
 
     // wait for a button event to occur
     bool btn_pressed = false;

@@ -6,9 +6,11 @@
 
 #include "watchface.h"
 #include "boot.h"
+#include "timer.h"
 
 #include "screens_menu.h"
 #include "testing.h"
+#include <event_queue.h>
 
 using namespace screens;
 
@@ -22,6 +24,7 @@ const std::function<Screen(bool)> screenFunctions[] = {
   screensMenu,
   testScreen,
   bootScreen,
+  timerScreen,
 };
 
 
@@ -32,7 +35,7 @@ void screens::dispatch(bool wakeFromSleep) {
     next = screenFunctions[current](wakeFromSleep);
     wakeFromSleep = false;
   }
-  while(next != current);
+  while(next != current || event_queue::queue.peek());
 }
 
 #include <constants.h>
