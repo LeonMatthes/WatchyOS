@@ -195,17 +195,21 @@ screens::Screen runTimer(bool initial) {
   while(remainingSeconds > 0);
 
   do {
-    auto event = queue.receive(portMAX_DELAY);
+    auto event = queue.receive(30 * 1000 / portTICK_PERIOD_MS);
     if(event){
       switch(*event) {
         case Event::BACK_BUTTON:
           return screens::MENU;
         case Event::MENU_BUTTON:
           return runTimer(false);
-        default:
+        case Event::UP_BUTTON:
+        case Event::DOWN_BUTTON:
           break;
       }
-
+    }
+    else {
+      // no input for a while, return to watchface
+      return screens::WATCHFACE;
     }
   }
   while(true);

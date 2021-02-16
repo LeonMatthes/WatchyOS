@@ -1,5 +1,6 @@
 #include "screens_menu.h"
 #include "rtc.h"
+#include "screens.h"
 
 using namespace screens;
 
@@ -69,7 +70,7 @@ screens::Screen screensMenu(bool wakeFromSleep) {
     // wait for a button event to occur
     bool btn_pressed = false;
     do {
-      auto event = event_queue::queue.receive(portMAX_DELAY);
+      auto event = event_queue::queue.receive(30 * 1000 / portTICK_PERIOD_MS);
       if(event) {
         switch (*event) {
           case event_queue::Event::MENU_BUTTON: 
@@ -91,6 +92,9 @@ screens::Screen screensMenu(bool wakeFromSleep) {
           default:
             break;
         }
+      }
+      else {
+        return screens::WATCHFACE;
       }
     }
     while(!btn_pressed);
