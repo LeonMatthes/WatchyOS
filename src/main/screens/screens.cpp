@@ -87,6 +87,7 @@ Screen takeNap(bool wake_from_sleep = false) {
   rtc::resetAlarm();
   accelerometer::clearInterrupts();
   fflush(stdout);
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
   esp_sleep_enable_ext1_wakeup(BTN_PIN_MASK, ESP_EXT1_WAKEUP_ANY_HIGH);
   esp_deep_sleep_start();
 }

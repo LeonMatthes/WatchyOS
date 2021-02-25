@@ -82,6 +82,11 @@ Screen watchface::update(bool wakeFromSleep /*= true*/) {
       return MENU;
     }
   }
+  auto now = rtc::currentTime();
+
+  if(wakeFromSleep && now.Hour == 1 && now.Minute == 0) {
+    return NAP;
+  }
 
   std::optional<std::thread> bleThread;
   uint8_t notifications = ble::notifications;
@@ -90,12 +95,6 @@ Screen watchface::update(bool wakeFromSleep /*= true*/) {
     bleThread = std::thread([](){
         ble::updateTime(rtc::initialized ? ble::FAST_UPDATE : ble::REBOOT);
         });
-  }
-
-  tmElements_t now = rtc::currentTime();
-
-  if(wakeFromSleep && now.Hour == 1 && now.Minute == 0) {
-    return NAP;
   }
 
   display.fillScreen(BG_COLOR);
