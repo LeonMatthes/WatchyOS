@@ -65,11 +65,32 @@ float batteryVoltage() {
 // We use a slightly lower value, as it drops very quickly when unplugged
 #define MAX_VOLTAGE 4.15
 
-// Minimum discharge voltage as defined in Datasheet
-// May need to be set higher in the future if it's not enough for any other component
-#define MIN_VOLTAGE 2.75
+// Minimum discharge voltage as defined in Datasheet is 2.75V, padded a bit, as with BLE
+// brownout detector kicks in a bit earlier
+#define MIN_VOLTAGE 2.8
+
+#include <algorithm>
+float percentageBetween(float voltage, float minV, float maxV, float minPercentage, float maxPercentage) {
+    float percentage = (voltage - minV) / (maxV - minV) * (maxPercentage - minPercentage) + minPercentage;
+    return std::clamp(percentage, 0.f, 1.f);
+}
 
 float batteryPercentage() {
-  float percentage = (batteryVoltage() - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE);
-  return (percentage < 0) ? 0 : (percentage > 1) ? 1 : percentage;
+  float voltage = batteryVoltage();
+
+  // estimate battery percentage in 3 quadrants
+  // estimation of the drop-off behavior, based on typical
+  // behavior on default Watchy battery
+  // May need to be recorded & tested further
+  //
+  // from 3.8V-4.2V -- around 80-100% charged
+  if(voltage > 3.8) {
+    return percentageBetween(voltage, 3.8, MAX_VOLTAGE, 0.8, 1);
+  }
+  // lower than 3.3V -- only about 10% remaining
+  if(voltage < 3.3) {
+    return percentageBetween(voltage, MIN_VOLTAGE, 3.3, 0, 0.1);
+  }
+  // voltage between 3.8 and 3.3 -- between 10-80% charged
+  return percentageBetween(voltage, 3.3, 3.8, 0.1, 0.8);
 }
