@@ -11,6 +11,7 @@ using namespace rtc;
 #include "accelerometer.h"
 #include "battery.h"
 #include "ble/update_time.h"
+#include "notifications.h"
 
 #include "res/icons.h"
 #include "res/nums.h"
@@ -18,6 +19,8 @@ using namespace rtc;
 
 #include <string>
 #include <sstream>
+#include <set>
+#include <vector>
 
 void drawBattery() {
   display.drawBitmap(5, 5, icon_battery, 45, 15, FG_COLOR);
@@ -64,10 +67,23 @@ void drawStepCount() {
   }
 }
 
-void drawNotifications(uint8_t notifications) {
+void drawNotifications(const std::vector<std::shared_ptr<const Notification>>& notifications) {
   display.fillRect(0, 155, 200, 20, BG_COLOR);
-  if(notifications & ble::Notifications::WHATSAPP) {
-    display.drawBitmap(90, 155, icon_whatsapp, 20, 20, FG_COLOR);
+
+  if(notifications.empty()) {
+    return;
+  }
+
+  std::set<const unsigned char*> icons;
+  for(const auto& notification : notifications) {
+    icons.emplace(notification->icon20x20());
+  }
+
+  const int margin = 2;
+  int x = 100 - (20/2 + margin) * icons.size();
+  for(const auto icon : icons) {
+    display.drawBitmap(x, 155, icon, 20, 20, FG_COLOR);
+    x += 20 + margin;
   }
 }
 
@@ -78,8 +94,13 @@ using namespace screens;
 
 Screen watchface::update(bool wakeFromSleep /*= true*/) {
   while(auto event = event_queue::queue.receive()) {
-    if(*event == event_queue::Event::MENU_BUTTON) {
-      return MENU;
+    switch(*event) {
+      case event_queue::Event::MENU_BUTTON:
+        return MENU;
+      case event_queue::Event::DOWN_BUTTON:
+        return NOTIFICATIONS;
+      default:
+        break;
     }
   }
   auto now = rtc::currentTime();
@@ -89,7 +110,7 @@ Screen watchface::update(bool wakeFromSleep /*= true*/) {
   }
 
   std::optional<std::thread> bleThread;
-  uint8_t notifications = ble::notifications;
+  auto notifications = Notification::all();
   if(wakeFromSleep) {
     // REBOOT will also update time, not just notifications
     bleThread = std::thread([](){
@@ -114,9 +135,15 @@ Screen watchface::update(bool wakeFromSleep /*= true*/) {
   if(bleThread) {
     bleThread->join();
     bleThread = {};
-    if(notifications != ble::notifications) {
+    auto newNotifications = Notification::all();
+    if(newNotifications.size() != notifications.size()
+        || !std::equal(
+          notifications.begin(),
+          notifications.end(),
+          newNotifications.begin(),
+          [](const std::shared_ptr<const Notification>& a, const std::shared_ptr<const Notification>& b) -> bool { return a->id == b->id; })) {
       // notifications changed, redraw
-      drawNotifications(ble::notifications);
+      drawNotifications(newNotifications);
       display.display(true);
       display.hibernate();
     }

@@ -15,6 +15,7 @@ private const val TAG = "WatchyNotifiListener"
 
 class NotificationListener : NotificationListenerService() {
     private val WHATSAPP_PACKAGE_NAME = "com.whatsapp"
+    private val packageFilter: Set<String> = hashSetOf("com.whatsapp")
 
     private var bound = false
 
@@ -51,6 +52,10 @@ class NotificationListener : NotificationListenerService() {
         Log.d(TAG, "Listener disconnected")
     }
 
+    private fun isRelevant(sbn: StatusBarNotification): Boolean {
+        return packageFilter.contains(sbn.packageName)
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         super.onNotificationPosted(sbn)
         if(!bound) {
@@ -58,9 +63,8 @@ class NotificationListener : NotificationListenerService() {
         }
 
         Log.d(TAG, "Notification posted: ${sbn.packageName}")
-
-        if(sbn.packageName == WHATSAPP_PACKAGE_NAME) {
-            sendNotificationUpdate()
+        if(isRelevant(sbn)) {
+            WatchyConnectionService.instance?.notificationPosted(sbn)
         }
     }
 
@@ -72,23 +76,16 @@ class NotificationListener : NotificationListenerService() {
 
         Log.d(TAG, "Notification removed: ${sbn.packageName}")
 
-        if(sbn.packageName == WHATSAPP_PACKAGE_NAME) {
-            sendNotificationUpdate()
+        if(isRelevant(sbn)) {
+            WatchyConnectionService.instance?.notificationRemoved(sbn)
         }
     }
 
     private fun sendNotificationUpdate() {
-        val anyWhatsapp = activeNotifications.any { notification: StatusBarNotification -> notification.packageName == WHATSAPP_PACKAGE_NAME }
-
-        val intent = Intent(BuildConfig.APPLICATION_ID + ".WATCHY_GATT_CALLBACK")
-        val notificationBits : Byte = if (anyWhatsapp)  {
-            0x01
-        } else {
-            0x00
+        for(sbn in activeNotifications) {
+            if(isRelevant(sbn)) {
+                WatchyConnectionService.instance?.notificationPosted(sbn)
+            }
         }
-        intent.putExtra(BuildConfig.APPLICATION_ID+ ".NotificationBits", notificationBits)
-        sendBroadcast(intent)
-
-        Log.d(TAG, "anyWhatsapp: $anyWhatsapp, notificationBits: $notificationBits")
     }
 }

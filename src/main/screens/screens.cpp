@@ -9,6 +9,7 @@
 #include "timer.h"
 
 #include "screens_menu.h"
+#include "notification_list.h"
 #include "testing.h"
 #include <event_queue.h>
 
@@ -25,6 +26,7 @@ const std::function<Screen(bool)> screenFunctions[] = {
   testScreen,
   bootScreen,
   timerScreen,
+  notificationsScreen
 };
 
 

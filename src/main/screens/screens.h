@@ -10,6 +10,7 @@ namespace screens {
     TEST_SCREEN = 3,
     BOOT = 4,
     TIMER = 5,
+    NOTIFICATIONS = 6
   };
 
   extern Screen current;

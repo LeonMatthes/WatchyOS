@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <iostream>
 
 #include "constants.h"
 #include "res/fonts/Inconsolata_Bold10pt7b.h"
@@ -10,24 +11,21 @@
 #include "e_ink.h"
 using namespace e_ink;
 
+#include <notifications.h>
+#include <rtc.h>
+
 screens::Screen testScreen(bool wakeFromSleep) {
   if(wakeFromSleep) {
     return screens::WATCHFACE;
   }
 
-  display.fillScreen(BG_COLOR);
-  int16_t headerHeight = screens::drawHeader();
-
-  display.setFont(&Inconsolata_Bold10pt7b);
-  display.setCursor(0, 20 + headerHeight);
-
-  display.println("012345678901234567890");
-  for(int i = 1; i < 20; i++) {
-    display.println(std::to_string(i).c_str());
+  auto notifications = Notification::all();
+  std::cout << "Notifications: " << std::endl;
+  for(const auto& notification : notifications) {
+    std::cout << std::to_string(notification->id) << ", " << std::to_string(notification->appId) << ", " << notification->title << ", " << notification->text << std::endl;
   }
-  display.display();
-  display.hibernate();
 
+  // Notification::create(5, Notification::AppID::WHATSAPP, std::string("Test"), std::string("Text"), rtc::currentTime());
 
   return screens::TEST_SCREEN;
 }

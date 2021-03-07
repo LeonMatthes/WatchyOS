@@ -2,7 +2,13 @@
 
 #include <cstdint>
 
+#include <TimeLib.h>
+
 namespace ble {
+
+  // data must contain at least 7 bytes
+  TimeElements timeFromBytes(const char* data);
+
   enum Notifications {
     WHATSAPP = 0x1
   };
@@ -13,8 +19,6 @@ namespace ble {
     CONNECTION = 3,
     DISCONNECT = 0xFF // only ever sent by the Phone to disconnect
   };
-
-  extern uint8_t notifications;
 
   bool updateTime(State connectionState = FAST_UPDATE, int64_t timeout = 3'000'000 /*ns*/);
 }

@@ -6,16 +6,17 @@ import android.app.PendingIntent
 import android.app.Service
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGattCharacteristic
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.os.Build
 import android.os.IBinder
+import android.service.notification.StatusBarNotification
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationCompat.PRIORITY_LOW
 import java.util.*
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.collections.ArrayList
+import kotlin.concurrent.withLock
 
 private val CHANNEL_ID = "ForegroundServiceChannel"
 
@@ -27,14 +28,20 @@ class WatchyConnectionService : Service() {
 
     var gattCallback = WatchyGattCallback(this)
 
-    var notificationBits : Byte = 0x00
+    val watchyNotifications = ArrayList<WatchyNotification>()
+    val phoneNotifications = ArrayList<WatchyNotification>()
+    val notificationsLock = ReentrantLock()
+
     var watchyStateID : Byte = 0x00
     var phoneStateID : Byte = 0x00
 
-    var receiver: BroadcastReceiver? = null
+    companion object {
+        var instance: WatchyConnectionService? = null
+    }
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
     }
 
     override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
@@ -55,28 +62,6 @@ class WatchyConnectionService : Service() {
         val bleDevice: BluetoothDevice = intent.getParcelableExtra("WatchyBLEDevice")!!
         bleDevice.connectGatt(this, false, gattCallback)
 
-        receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent) {
-                Log.d(TAG, "Received intent")
-
-                if(intent.hasExtra(BuildConfig.APPLICATION_ID + ".NotificationBits")) {
-                    val newNotificationBits = intent.getByteExtra(BuildConfig.APPLICATION_ID + ".NotificationBits", 127)
-                    if(newNotificationBits != notificationBits) {
-                        if (phoneStateID == Byte.MAX_VALUE) {
-                            phoneStateID = Byte.MIN_VALUE
-                        } else {
-                            phoneStateID++
-                        }
-                    }
-                    notificationBits = newNotificationBits
-                    Log.d(TAG, "Notifications: $notificationBits")
-                }
-            }
-        }
-        val filter = IntentFilter()
-        filter.addAction("com.example.watchyoscompanionapp.WATCHY_GATT_CALLBACK")
-        registerReceiver(receiver, filter)
-
         val intent = Intent(BuildConfig.APPLICATION_ID + ".WATCHY_NOTIFICATION_LISTENER")
         // request update from NotificationListener
         intent.putExtra(BuildConfig.APPLICATION_ID+ ".Command", "sendUpdate")
@@ -88,9 +73,6 @@ class WatchyConnectionService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
-        if(receiver != null) {
-            unregisterReceiver(receiver)
-        }
         gattCallback.stop()
     }
 
@@ -98,10 +80,62 @@ class WatchyConnectionService : Service() {
         return null
     }
 
-    private fun writeTimeCharacteristic() {
-        val characteristic = gattCallback.getCharacteristic(WATCHYOS_TIME_CHARACTERISTIC_UUID) ?: return
 
-        characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+    private fun newNotificationId(): Byte? {
+        var id = -1
+        do {
+            id += 1
+            val found = phoneNotifications.find { notification -> notification.id == id.toByte() } != null
+                    || watchyNotifications.find { notification -> notification.id == id.toByte() } != null
+        } while(found && id < 256)
+
+        // all id's already taken
+        if(id > 255) {
+            return null
+        }
+        else {
+            return id.toByte()
+        }
+    }
+
+    fun notificationPosted(sbn: StatusBarNotification) {
+        Log.i(TAG, "WhatsApp Notification posted")
+        notificationsLock.withLock {
+            val previous = phoneNotifications.find { notification: WatchyNotification -> notification.sbn.key == sbn.key }
+            if(previous != null) {
+                previous.sbn = sbn
+            }
+            else {
+                val random = Random()
+
+                val newId = newNotificationId() ?: return
+                phoneNotifications.add(WatchyNotification(newId, sbn))
+            }
+
+            increasePhoneStateId()
+        }
+    }
+
+    private fun increasePhoneStateId() {
+        if(phoneStateID == Byte.MAX_VALUE) {
+            phoneStateID = Byte.MIN_VALUE
+        }
+        else {
+            phoneStateID++
+        }
+    }
+
+    fun notificationRemoved(sbn: StatusBarNotification) {
+        Log.i(TAG, "WhatsApp Notification removed")
+        notificationsLock.withLock {
+            phoneNotifications.removeAll { notification -> notification.sbn.key == sbn.key }
+
+            increasePhoneStateId()
+        }
+    }
+
+
+    private fun writeTimeCharacteristic() {
         val cal = Calendar.getInstance()
         val payload = byteArrayOf(
                 (cal.get(Calendar.YEAR) - 1970).toByte(),
@@ -112,18 +146,44 @@ class WatchyConnectionService : Service() {
                 cal.get(Calendar.MINUTE).toByte(),
                 cal.get(Calendar.SECOND).toByte()
         )
-        characteristic.value = payload
-        gattCallback.pushWrite(characteristic)
+        gattCallback.pushCommand(WriteGattCommand(WATCHYOS_TIME_CHARACTERISTIC_UUID, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT, payload))
         Log.d(TAG, "Writing date characteristic to value ${payload.joinToString()}")
     }
 
-    private fun writeNotificationCharacteristic() {
-        val characteristic = gattCallback.getCharacteristic(WATCHYOS_NOTIFICATIONS_CHARACTERISTIC_UUID) ?: return
+    private fun clearWatchyNotifications() {
+        writeNotificationCharacteristic(byteArrayOf(WatchyNotificationCommands.REMOVE_ALL.value))
 
-        characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-        characteristic.value = byteArrayOf(notificationBits)
+        notificationsLock.withLock {
+            watchyNotifications.clear()
+        }
+    }
 
-        gattCallback.pushWrite(characteristic)
+    private fun writeNotificationCharacteristic(bytes: ByteArray) {
+        gattCallback.pushCommand(
+                WriteGattCommand(
+                        WATCHYOS_NOTIFICATIONS_CHARACTERISTIC_UUID,
+                        BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
+                        bytes))
+    }
+
+    private fun writeNotifications() {
+        notificationsLock.withLock {
+            for(watchyNotification in watchyNotifications) {
+                if(phoneNotifications.find { notification -> notification.id == watchyNotification.id } == null) {
+                    writeNotificationCharacteristic(watchyNotification.removalPayload())
+                }
+            }
+
+            for(phoneNotification in phoneNotifications) {
+                if(!watchyNotifications.contains(phoneNotification)) {
+                    writeNotificationCharacteristic(phoneNotification.creationPayload())
+                }
+            }
+
+            watchyNotifications.clear()
+            watchyNotifications.addAll(phoneNotifications)
+        }
+
     }
 
     private fun writeWatchyState(state: Byte, stateID: Byte) {
@@ -132,11 +192,17 @@ class WatchyConnectionService : Service() {
         characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
         characteristic.value = byteArrayOf(state, stateID)
 
-        gattCallback.pushWrite(characteristic) {watchyStateID = stateID}
+        gattCallback.pushCommand(
+                WriteGattCommand(
+                        WATCHYOS_STATE_CHARACTERISTIC_UUID,
+                        BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
+                        byteArrayOf(state, stateID))
+                        { notificationsLock.withLock { watchyStateID = stateID } })
     }
 
     private fun fullSync(state: Byte = WatchyBLEState.REBOOT.value) {
-        writeNotificationCharacteristic()
+        clearWatchyNotifications()
+        writeNotifications()
         writeTimeCharacteristic()
         writeWatchyState(WatchyBLEState.DISCONNECT.value, phoneStateID)
     }
@@ -160,7 +226,7 @@ class WatchyConnectionService : Service() {
                     fullSync(state)
                 }
                 else if(watchyStateID != phoneStateID) {
-                    writeNotificationCharacteristic()
+                    writeNotifications()
                 }
                 // this will cause Watchy to initiate a disconnect, which is much faster then Android disconnecting
                 writeWatchyState(WatchyBLEState.DISCONNECT.value, phoneStateID)

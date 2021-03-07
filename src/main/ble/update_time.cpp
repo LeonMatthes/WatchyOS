@@ -10,6 +10,7 @@
 #include "esp_log.h"
 
 #include "../rtc.h"
+#include "notificationsCharacteristic.h"
 
 #define WATCHYOS_SERVICE_UUID        "f9ce43b7-d389-4add-adf7-82811c462ca1"
 #define TIME_CHARACTERISTIC_UUID "e7e3232e-88c0-452f-abd1-003cc2ec24d3"
@@ -18,8 +19,20 @@
 
 const char* TAG = "BLE";
 
-RTC_DATA_ATTR uint8_t ble::notifications = 0;
 static RTC_DATA_ATTR uint8_t stateID = 0; // used to make sure Watchy & Phone don't get desynchronized
+
+TimeElements ble::timeFromBytes(const char* data) {
+  return TimeElements {
+    // our incoming data is reverse from the tmElements declaration
+    .Second = static_cast<uint8_t>(data[6]),
+      .Minute = static_cast<uint8_t>(data[5]),
+      .Hour = static_cast<uint8_t>(data[4]),
+      .Wday = static_cast<uint8_t>(data[3]), // day of week, 1-7, sunday is 1
+      .Day = static_cast<uint8_t>(data[2]),
+      .Month = static_cast<uint8_t>(data[1]),
+      .Year = static_cast<uint8_t>(data[0]) // offset from 1970
+  };
+}
 
 class TimeCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
   public:
@@ -28,38 +41,12 @@ class TimeCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
     virtual void onWrite(NimBLECharacteristic* characteristic) override {
       std::string value = characteristic->getValue();
       if(7 == value.size()){
-        tmElements_t newTime {
-          // our incoming data is reverse from the tmElements declaration
-          .Second = static_cast<uint8_t>(value[6]),
-          .Minute = static_cast<uint8_t>(value[5]),
-          .Hour = static_cast<uint8_t>(value[4]),
-          .Wday = static_cast<uint8_t>(value[3]), // day of week, 1-7, sunday is 1
-          .Day = static_cast<uint8_t>(value[2]),
-          .Month = static_cast<uint8_t>(value[1]),
-          .Year = static_cast<uint8_t>(value[0]) // offset from 1970
-        };
-        rtc::setTime(newTime);
+        rtc::setTime(ble::timeFromBytes(value.data()));
         rtc::initialized = true;
         ESP_LOGI(TAG, "Successfully updated time from Phone");
       }
       else {
         ESP_LOGW(TAG, "Received invalid new time of %i bytes", value.size());
-      }
-    }
-};
-
-class NotificationCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
-  public:
-    virtual ~NotificationCharacteristicCallbacks() {}
-
-    virtual void onWrite(NimBLECharacteristic* characteristic) override {
-      std::string value = characteristic->getValue();
-      if(1 == value.size()){
-        ble::notifications = static_cast<uint8_t>(value[0]);
-        ESP_LOGI(TAG, "Successfully updated notifications from Phone");
-      }
-      else {
-        ESP_LOGW(TAG, "Received invalid new notifications of %i bytes", value.size());
       }
     }
 };
@@ -98,12 +85,10 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     bool connected = false;
 
     virtual ~ServerCallbacks() {}
+
     virtual void onConnect(NimBLEServer* server) override {
       ESP_LOGI(TAG, "Client connected");
       connected = true;
-    }
-    virtual void onConnect(NimBLEServer* server, ble_gap_conn_desc *desc) override {
-      ESP_LOGI(TAG, "Client connected 2");
     }
 
     virtual void onDisconnect(NimBLEServer* server) override {
@@ -115,7 +100,7 @@ class ServerCallbacks : public NimBLEServerCallbacks {
 bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* = 3'000'000*/) {
   ServerCallbacks callbacks;
   TimeCharacteristicCallbacks timeCB;
-  NotificationCharacteristicCallbacks notificationCB;
+  NotificationCharacteristic notificationCB;
 
   NimBLEDevice::init("WatchyOS");
   NimBLEServer *pServer = BLEDevice::createServer();
@@ -128,11 +113,7 @@ bool ble::updateTime(State connectionState /*= FAST_UPDATE*/, int64_t timeout/* 
                                        );
   pCharacteristic->setCallbacks(&timeCB);
 
-  NimBLECharacteristic *notificationChar = pService->createCharacteristic(
-                                         NOTIFICATIONS_CHARACTERISTIC_UUID,
-                                         NIMBLE_PROPERTY::WRITE
-                                       );
-  notificationChar->setCallbacks(&notificationCB);
+  notificationCB.createNimbleCharacteristic(pService);
 
   StateCharacteristicCallbaks stateCallback(pServer);
   uint8_t state[] = { connectionState, stateID };

@@ -17,24 +17,47 @@ class WatchyGattCallback(private val connectionService: WatchyConnectionService)
     var gatt: BluetoothGatt? = null
 
     // warning! These queues will be reset on connect
-    private val writeQueue : Queue<Pair<BluetoothGattCharacteristic, (Boolean) -> Unit>> = LinkedList<Pair<BluetoothGattCharacteristic, (Boolean) -> Unit>>()
-    private val readQueue: Queue<BluetoothGattCharacteristic> = LinkedList<BluetoothGattCharacteristic>()
+    private val commandQueue: Queue<BLECommand> = LinkedList<BLECommand>()
 
-    fun pushWrite(characteristic: BluetoothGattCharacteristic, successCallback: (Boolean) -> Unit = {}) {
-        writeQueue.add(Pair(characteristic, successCallback))
+    fun pushCommand(command: BLECommand) {
+        commandQueue.add(command)
     }
 
-    fun pushRead(characteristic: BluetoothGattCharacteristic) {
-        readQueue.add(characteristic)
+    private fun writeCommand(command: WriteGattCommand) {
+        val characteristic = getCharacteristic(command.uuid)
+        val gatt = this.gatt
+        if(characteristic == null || gatt == null) {
+            commandQueue.remove()
+            return dispatch()
+        }
+
+        characteristic.writeType = command.writeType
+        characteristic.value = command.data
+        gatt.writeCharacteristic(characteristic)
+    }
+
+    private fun readCommand(command: ReadGattCommand) {
+        val characteristic = getCharacteristic(command.uuid)
+        val gatt = this.gatt
+        if(characteristic == null || gatt == null) {
+            commandQueue.remove()
+            return dispatch()
+        }
+
+        gatt.readCharacteristic(characteristic)
     }
 
     private fun dispatch() {
         val gatt = this.gatt ?: return
 
-        when {
-            !readQueue.isEmpty() -> gatt.readCharacteristic(readQueue.peek())
-            !writeQueue.isEmpty() -> gatt.writeCharacteristic(writeQueue.peek()?.first)
-            else -> gatt.disconnect()
+        if(!commandQueue.isEmpty()) {
+            when(val command = commandQueue.peek()) {
+                is WriteGattCommand -> writeCommand(command)
+                is ReadGattCommand -> readCommand(command)
+            }
+        }
+        else {
+            gatt.disconnect()
         }
     }
 
@@ -51,55 +74,61 @@ class WatchyGattCallback(private val connectionService: WatchyConnectionService)
     override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
         super.onCharacteristicWrite(gatt, characteristic, status)
 
-        if(writeQueue.peek()?.first?.uuid == characteristic.uuid) {
+        val command = commandQueue.peek()
+        if(command is WriteGattCommand && command.uuid == characteristic.uuid) {
+            commandQueue.remove()
+
             when (status) {
                 BluetoothGatt.GATT_SUCCESS -> {
                     Log.d(TAG, "Successfully wrote characteristic: ${characteristic.uuid}")
 
-                    writeQueue.remove().second(true)
+                    command.callback(true)
                 }
                 BluetoothGatt.GATT_WRITE_NOT_PERMITTED -> {
                     Log.w(TAG, "Write to characteristic: ${characteristic.uuid} not permitted")
-                    writeQueue.remove().second(false)
+                    command.callback(false)
                 }
                 else -> {
-                    Log.w(TAG, "Characteristic write failed with status: $status!")
-                    writeQueue.remove().second(false)
+                    Log.w(TAG, "Characteristic '${characteristic.uuid}' write failed with status: $status!")
+                    command.callback(false)
                 }
             }
+
+            dispatch()
         }
         else {
             Log.w(TAG, "wrote non-queued characteristic: ${characteristic.uuid}")
+            // don't dispatch, there must still be an incoming write result
         }
-        dispatch()
     }
 
     override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
         super.onCharacteristicRead(gatt, characteristic, status)
 
-        if(readQueue.peek()?.uuid == characteristic.uuid) {
+        val command = commandQueue.peek()
+        if(command is ReadGattCommand && command.uuid == characteristic.uuid) {
+            commandQueue.remove()
+
             when (status) {
                 BluetoothGatt.GATT_SUCCESS -> {
                     Log.d(TAG, "Successfully read characteristic: ${characteristic.uuid}")
 
                     connectionService.onCharacteristicRead(characteristic)
-                    readQueue.remove()
                 }
                 BluetoothGatt.GATT_READ_NOT_PERMITTED -> {
                     Log.w(TAG, "Read of non-readable characteristic: ${characteristic.uuid}")
-                    readQueue.remove()
                 }
                 else -> {
-                    Log.w(TAG, "Read of ${characteristic.uuid} returned with status: $status, retrying one more time...")
-                    gatt.readCharacteristic(readQueue.remove())
-                    return
+                    Log.w(TAG, "Read of ${characteristic.uuid} returned with status: $status...")
                 }
             }
+
+            dispatch()
         }
         else {
             Log.w(TAG, "Read non-queued characteristic ${characteristic.uuid}")
+            // There must still be another read incoming - do nothing
         }
-        dispatch()
     }
 
     private fun BluetoothGatt.printGattTable() {
@@ -126,12 +155,8 @@ class WatchyGattCallback(private val connectionService: WatchyConnectionService)
     }
 
     private fun successfullyConnected() {
-        readQueue.clear()
-        writeQueue.clear()
-        val characteristic = getCharacteristic(WATCHYOS_STATE_CHARACTERISTIC_UUID)
-        if (characteristic != null) {
-            readQueue.add(characteristic)
-        }
+        commandQueue.clear()
+        commandQueue.add(ReadGattCommand(WATCHYOS_STATE_CHARACTERISTIC_UUID))
         dispatch()
     }
 

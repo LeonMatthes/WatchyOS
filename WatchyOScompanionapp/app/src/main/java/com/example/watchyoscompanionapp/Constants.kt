@@ -15,3 +15,14 @@ enum class WatchyBLEState(val value: Byte) {
     CONNECTION(3),
     DISCONNECT(-1) // 0xFF
 }
+
+enum class WatchyNotificationCommands(val value: Byte) {
+    CREATE(0),
+    REMOVE(1),
+    REMOVE_ALL(2)
+}
+
+enum class WatchyAppId(val value: Byte) {
+    WHATSAPP(0),
+    UNKNOWN(-1) // 0xFF
+}
