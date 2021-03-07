@@ -18,22 +18,21 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.collections.ArrayList
 import kotlin.concurrent.withLock
 
-private val CHANNEL_ID = "ForegroundServiceChannel"
+private const val CHANNEL_ID = "ForegroundServiceChannel"
 
 private const val TAG = "WatchyConnectionService"
 
+private const val SERVICE_ID = 1
+
 class WatchyConnectionService : Service() {
-
-    val SERVICE_ID = 1
-
     var gattCallback = WatchyGattCallback(this)
 
-    val watchyNotifications = ArrayList<WatchyNotification>()
-    val phoneNotifications = ArrayList<WatchyNotification>()
-    val notificationsLock = ReentrantLock()
+    private val watchyNotifications = ArrayList<WatchyNotification>()
+    private val phoneNotifications = ArrayList<WatchyNotification>()
+    private val notificationsLock = ReentrantLock()
 
-    var watchyStateID : Byte = 0x00
-    var phoneStateID : Byte = 0x00
+    private var watchyStateID : Byte = 0x00
+    private var phoneStateID : Byte = 0x00
 
     companion object {
         var instance: WatchyConnectionService? = null
@@ -99,7 +98,6 @@ class WatchyConnectionService : Service() {
     }
 
     fun notificationPosted(sbn: StatusBarNotification) {
-        Log.i(TAG, "WhatsApp Notification posted")
         notificationsLock.withLock {
             val previous = phoneNotifications.find { notification: WatchyNotification -> notification.sbn.key == sbn.key }
             if(previous != null) {

@@ -15,7 +15,7 @@ private const val TAG = "WatchyNotifiListener"
 
 class NotificationListener : NotificationListenerService() {
     private val WHATSAPP_PACKAGE_NAME = "com.whatsapp"
-    private val packageFilter: Set<String> = hashSetOf("com.whatsapp")
+    private val packageFilter: Set<String> = hashSetOf("com.whatsapp", "com.samsung.android.email.provider")
 
     private var bound = false
 

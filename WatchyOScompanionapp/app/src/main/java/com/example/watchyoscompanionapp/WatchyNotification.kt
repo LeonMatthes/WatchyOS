@@ -10,13 +10,13 @@ data class WatchyNotification(val id: Byte, var sbn: StatusBarNotification) {
         get() = sbn.notification.extras
 
     private fun text() : String {
-        return extras.get(Notification.EXTRA_TEXT)?.toString() ?:
-                extras.get(Notification.EXTRA_TEXT_LINES)?.toString() ?:
+        return extras.get(Notification.EXTRA_TEXT_LINES)?.toString() ?:
+                extras.get(Notification.EXTRA_TEXT)?.toString() ?:
                 ""
     }
 
     private fun title() : String {
-        return extras.get(Notification.EXTRA_TITLE)?.toString() ?: ""
+        return extras.get(Notification.EXTRA_TITLE)?.toString() ?: "---"
     }
 
     fun removalPayload() : ByteArray {
@@ -33,7 +33,7 @@ data class WatchyNotification(val id: Byte, var sbn: StatusBarNotification) {
     fun creationPayload() : ByteArray {
         val cal = Calendar.getInstance()
 
-        val title = title().replace(Regex("[^A-Za-z0-9,.! \\n]"), "").take(25)
+        val title = title().replace(Regex("[^A-Za-z0-9,.!? \\n]"), "").take(25)
 
         val text = text().replace(Regex("[^A-Za-z0-9,.! \\n]"), "").take(200)
 
