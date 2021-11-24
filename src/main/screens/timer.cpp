@@ -122,14 +122,14 @@ screens::Screen runTimer(bool initial) {
     return screens::MENU;
   }
 
-  vibration_motor::delay(300);
-  vibration_motor::buzz(50);
-  vibration_motor::delay(300);
-  vibration_motor::buzz(50);
-
   // esp_get_time function is in ms
   auto timer = *selected * 1000 * 1000;
   auto beginTime = esp_timer_get_time();
+
+  vibration_motor::delay(300);
+  vibration_motor::buzz(50);
+  vibration_motor::delay(300);
+  vibration_motor::buzz(50);
 
   const auto drawDurationNs = 300 * 1000; /*around the time it takes for partial refresh*/
 

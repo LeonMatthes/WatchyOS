@@ -43,6 +43,8 @@ const unsigned char* Notification::icon20x20() const {
   switch(appId) {
     case WHATSAPP:
       return icon_whatsapp;
+    case EMAIL:
+      return icon_email;
     case UNKNOWN:
       return icon_unknown_notification;
   }
@@ -56,7 +58,8 @@ std::vector<shared_ptr<const Notification>> loadFromRTC() {
       notifications.emplace_back(std::make_shared<Notification>(*rtcNotification));
     }
   }
-  return std::move(notifications);
+  std::sort(notifications.begin(), notifications.end());
+  return notifications;
 }
 
 void Notification::storeInRTC() {
@@ -154,4 +157,12 @@ void Notification::remove() {
 void Notification::removeAll() {
   auto guard = lock_guard(Notification::mutex);
   loadedNotifications = vector<shared_ptr<const Notification>>();
+}
+
+bool operator<(const TimeElements& a, const TimeElements& b) {
+  return std::tie(a.Year, a.Month, a.Day, a.Hour, a.Minute, a.Second) < std::tie(b.Year, b.Month, b.Day, b.Hour, b.Minute, b.Second);
+}
+
+bool Notification::operator<(const Notification& other) const {
+  return when < other.when;
 }

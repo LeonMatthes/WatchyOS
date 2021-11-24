@@ -21,10 +21,8 @@ import android.provider.Settings
 import android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS
 import android.text.TextUtils
 import android.util.Log
-import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import java.util.*
 
 private const val ENABLE_BLUETOOTH_REQUEST_CODE = 1
 private const val LOCATION_PERMISSION_REQUEST_CODE = 2
@@ -42,8 +40,8 @@ class MainActivity : AppCompatActivity() {
         bluetoothAdapter.bluetoothLeScanner
     }
 
-    private val testButton by lazy {
-        findViewById<Button>(R.id.test_button)
+    private val connectButton by lazy {
+        findViewById<Button>(R.id.connect_button)
     }
 
     private val textView by lazy {
@@ -77,7 +75,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        testButton.setOnClickListener { test() }
+        connectButton.setOnClickListener { connectButtonClicked() }
         if(!isNotificationServiceEnabled()) {
             Log.d("Watchy", "Asking for Notification Listener approval")
             startActivity(Intent(ACTION_NOTIFICATION_LISTENER_SETTINGS))
@@ -87,11 +85,11 @@ class MainActivity : AppCompatActivity() {
     private var isScanning = false
         set(value) {
             field = value
-            runOnUiThread { testButton.text = if (value) "Stop scan" else "Start scan" }
+            runOnUiThread { connectButton.text = if (value) "Stop scan" else "Connect to Watchy" }
         }
 
 
-    private fun test() {
+    private fun connectButtonClicked() {
         if(!isLocationPermissionGranted) {
             textView.text = "Location permission is needed on Android 6.0+ to use BLE!\nPlease grant this app location permissions.\nThis app won't use your location data!"
             return
@@ -114,12 +112,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopBLEScan() {
+        textView.text = ""
         bleScanner.stopScan(scanCallback)
         isScanning = false
     }
 
     private fun startBLEScan() {
         textView.text = "Scanning for BLE devices"
+        connectButton.text = "Stop Scanning"
 
         val filter = ScanFilter.Builder()
             .setServiceUuid(ParcelUuid(WATCHYOS_SERVICE_UUID))

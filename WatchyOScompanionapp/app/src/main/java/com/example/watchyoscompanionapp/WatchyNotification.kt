@@ -3,20 +3,36 @@ package com.example.watchyoscompanionapp
 import android.app.Notification
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import java.lang.StringBuilder
 import java.util.*
 
 data class WatchyNotification(val id: Byte, var sbn: StatusBarNotification) {
     private val extras
         get() = sbn.notification.extras
 
-    private fun text() : String {
-        return extras.get(Notification.EXTRA_TEXT_LINES)?.toString() ?:
-                extras.get(Notification.EXTRA_TEXT)?.toString() ?:
-                ""
+    fun text() : String {
+        val lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
+        if(lines != null && lines.isNotEmpty()) {
+            val stringBuilder = StringBuilder()
+            for(msg in lines) {
+                if(msg.isNotEmpty()) {
+                    stringBuilder.append(msg.toString())
+                    stringBuilder.append('\n')
+                }
+            }
+            return stringBuilder.toString().trim()
+        }
+
+        val chars = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
+        if(chars != null && chars.isNotEmpty()) {
+            return chars.toString()
+        }
+
+        return extras.get(Notification.EXTRA_TEXT)?.toString() ?: ""
     }
 
-    private fun title() : String {
-        return extras.get(Notification.EXTRA_TITLE)?.toString() ?: "---"
+    fun title() : String {
+        return extras.get(Notification.EXTRA_TITLE)?.toString() ?: ""
     }
 
     fun removalPayload() : ByteArray {
@@ -26,16 +42,15 @@ data class WatchyNotification(val id: Byte, var sbn: StatusBarNotification) {
     private fun appId() : Byte {
         return when(sbn.packageName) {
             "com.whatsapp" -> WatchyAppId.WHATSAPP
+            "com.samsung.android.email.provider" -> WatchyAppId.EMAIL
             else -> WatchyAppId.UNKNOWN
         }.value
     }
 
     fun creationPayload() : ByteArray {
-        val cal = Calendar.getInstance()
-
         val title = title().replace(Regex("[^A-Za-z0-9,.!? \\n]"), "").take(25)
 
-        val text = text().replace(Regex("[^A-Za-z0-9,.! \\n]"), "").take(200)
+        val text = watchyCompatible(text()).take(150)
 
         // Add +1 for null bytes
         val bytes = ByteArray(10 + title.length + 1 + text.length + 1)

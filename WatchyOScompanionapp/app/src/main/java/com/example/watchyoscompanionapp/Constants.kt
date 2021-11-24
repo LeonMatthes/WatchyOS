@@ -24,5 +24,6 @@ enum class WatchyNotificationCommands(val value: Byte) {
 
 enum class WatchyAppId(val value: Byte) {
     WHATSAPP(0),
+    EMAIL(1),
     UNKNOWN(-1) // 0xFF
 }

@@ -89,34 +89,40 @@ class WatchyConnectionService : Service() {
         } while(found && id < 256)
 
         // all id's already taken
-        if(id > 255) {
-            return null
+        return if(id > 255) {
+            null
         }
         else {
-            return id.toByte()
+            id.toByte()
         }
     }
 
     fun notificationPosted(sbn: StatusBarNotification) {
         notificationsLock.withLock {
+            Log.d(TAG, sbn.toString())
+            Log.d(TAG, "Is summary: ${sbn.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY}")
+            val watchyNotification = WatchyNotification(0x00, sbn)
+            Log.d(TAG, "Title: ${watchyNotification.title()}, Text: ${watchyNotification.text()}")
+
             val previous = phoneNotifications.find { notification: WatchyNotification -> notification.sbn.key == sbn.key }
             if(previous != null) {
                 previous.sbn = sbn
             }
             else {
-                val random = Random()
-
                 val newId = newNotificationId() ?: return
                 phoneNotifications.add(WatchyNotification(newId, sbn))
             }
 
             increasePhoneStateId()
+            Log.d(TAG, "Notification size: ${phoneNotifications.size}")
         }
     }
 
     private fun increasePhoneStateId() {
         if(phoneStateID == Byte.MAX_VALUE) {
-            phoneStateID = Byte.MIN_VALUE
+            // make sure the phoneStateID never includes 0.
+            // 0 is reserved for an uninitialized Watchy
+            phoneStateID = (Byte.MIN_VALUE + 1).toByte()
         }
         else {
             phoneStateID++
@@ -193,7 +199,7 @@ class WatchyConnectionService : Service() {
         gattCallback.pushCommand(
                 WriteGattCommand(
                         WATCHYOS_STATE_CHARACTERISTIC_UUID,
-                        BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
+                        BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
                         byteArrayOf(state, stateID))
                         { notificationsLock.withLock { watchyStateID = stateID } })
     }

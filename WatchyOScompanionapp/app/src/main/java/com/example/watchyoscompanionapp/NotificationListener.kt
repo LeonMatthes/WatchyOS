@@ -14,7 +14,6 @@ import javax.net.ssl.SSLEngineResult
 private const val TAG = "WatchyNotifiListener"
 
 class NotificationListener : NotificationListenerService() {
-    private val WHATSAPP_PACKAGE_NAME = "com.whatsapp"
     private val packageFilter: Set<String> = hashSetOf("com.whatsapp", "com.samsung.android.email.provider")
 
     private var bound = false
@@ -53,7 +52,8 @@ class NotificationListener : NotificationListenerService() {
     }
 
     private fun isRelevant(sbn: StatusBarNotification): Boolean {
-        return packageFilter.contains(sbn.packageName)
+        val isGroupSummary = sbn.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY > 0
+        return packageFilter.contains(sbn.packageName) && !isGroupSummary
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {

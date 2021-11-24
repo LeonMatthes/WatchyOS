@@ -14,6 +14,7 @@ class Notification {
   public:
     enum AppID {
       WHATSAPP = 0x00,
+      EMAIL=0x01,
       UNKNOWN = 0xFF
     };
 
@@ -47,6 +48,7 @@ class Notification {
     static void removeAll();
     static void remove(uint8_t id);
 
+    bool operator<(const Notification& other) const;
 
   private:
     static std::optional<std::vector<std::shared_ptr<const Notification>>> loadedNotifications;
