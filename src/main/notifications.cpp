@@ -58,7 +58,7 @@ std::vector<shared_ptr<const Notification>> loadFromRTC() {
       notifications.emplace_back(std::make_shared<Notification>(*rtcNotification));
     }
   }
-  std::sort(notifications.begin(), notifications.end());
+  std::sort(notifications.begin(), notifications.end(), [](const auto& a, const auto& b) { return *a < *b; });
   return notifications;
 }
 

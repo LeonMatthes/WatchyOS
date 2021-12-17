@@ -48,7 +48,7 @@ data class WatchyNotification(val id: Byte, var sbn: StatusBarNotification) {
     }
 
     fun creationPayload() : ByteArray {
-        val title = title().replace(Regex("[^A-Za-z0-9,.!? \\n]"), "").take(25)
+        val title = watchyCompatible(title()).replace(Regex("[\\n]"), " ").take(25)
 
         val text = watchyCompatible(text()).take(150)
 

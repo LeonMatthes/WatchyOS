@@ -8,6 +8,8 @@ using namespace event_queue;
 #include <e_ink.h>
 using namespace e_ink;
 
+RTC_DATA_ATTR int64_t selected_time = 5 * 60;
+
 int drawTime(int minutes, int seconds) {
     display.fillScreen(BG_COLOR);
 
@@ -26,8 +28,8 @@ int drawTime(int minutes, int seconds) {
 }
 
 std::optional<int64_t> selectTime(bool initial) {
-  auto minutes = 5;
-  auto seconds = 0;
+  auto minutes = selected_time / 60;
+  auto seconds = selected_time % 60;
   bool selectMinutes = true;
 
   do {
@@ -66,10 +68,10 @@ std::optional<int64_t> selectTime(bool initial) {
               selectMinutes = true;
               break;
             case Event::UP_BUTTON:
-              seconds = (seconds + 1) % 60;
+              seconds = (seconds + 5) % 60;
               break;
             case Event::DOWN_BUTTON:
-              seconds = (seconds <= 0) ? 59 : seconds - 1;
+              seconds = (seconds <= 0) ? 55 : seconds - 5;
               break;
           }
         }
@@ -121,6 +123,8 @@ screens::Screen runTimer(bool initial) {
   if(!selected) {
     return screens::MENU;
   }
+
+  selected_time = *selected;
 
   // esp_get_time function is in ms
   auto timer = *selected * 1000 * 1000;

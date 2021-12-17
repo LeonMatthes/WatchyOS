@@ -53,7 +53,7 @@ class NotificationListener : NotificationListenerService() {
 
     private fun isRelevant(sbn: StatusBarNotification): Boolean {
         val isGroupSummary = sbn.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY > 0
-        return packageFilter.contains(sbn.packageName) && !isGroupSummary
+        return packageFilter.contains(sbn.packageName)// && !isGroupSummary
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {

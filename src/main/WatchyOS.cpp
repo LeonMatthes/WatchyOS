@@ -90,6 +90,12 @@ void app_main(void)
   accelerometer::clearInterrupts();
   Notification::storeInRTC();
   fflush(stdout);
+
+  // See: https://github.com/sqfmi/Watchy/pull/117
+  for(int i = 0; i < 48; i++) {
+    pinMode(i, INPUT);
+  }
+
   esp_sleep_enable_ext0_wakeup(RTC_PIN, 0); //enable deep sleep wake on RTC interrupt
   esp_sleep_enable_ext1_wakeup(BTN_PIN_MASK, ESP_EXT1_WAKEUP_ANY_HIGH); //enable deep sleep wake on button press
   ESP_LOGI("WatchyOS", "Entering Deep Sleep");
